@@ -48,6 +48,7 @@ class _RPN(nn.Module):
         batch_size =base_feat.size(0)
 
         rpn_conv1 = F.relu(self.RPN_Conv(base_feat),inplace=True)
+        print("rpn_conv1: {}".format(rpn_conv1.size()))
 
 
         # 1. softmax 分类anchor获得fg和bg

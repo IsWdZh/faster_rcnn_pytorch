@@ -7,8 +7,8 @@ from net.faster_rcnn import Faster_RCNN
 class VGG16(Faster_RCNN):
     '''VGG16 model'''
     def __init__(self, classes):
+        self.base_feat_out_dim = 512
         super(VGG16, self).__init__(classes)
-
 
     def _init_modules(self):
         vgg = models.vgg16(pretrained=True)

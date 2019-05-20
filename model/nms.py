@@ -41,7 +41,7 @@ def nms_cpu(dets, thresh):
 
 def nms(dets, thresh, force_cpu=False):
     """Dispatch to either CPU or GPU NMS implementations."""
-    # force_cpu = False
+    force_cpu = True
     if dets.shape[0] == 0:
         return []
     return nms_gpu(dets, thresh) if force_cpu == False else nms_cpu(dets, thresh)

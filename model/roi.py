@@ -115,13 +115,23 @@ def test_roi_module():
     # pip install chainer
     import chainer.functions as F
     from chainer import Variable
+    import numpy as np
+    from IPython import embed
     x_cn = Variable(t2c(x))
 
     o_cn = F.roi_pooling_2d(x_cn, t2c(rois), outh, outw, spatial_scale)
+    # print(type(o_cn))
+    print("\n-------------------\n")
+    print(o_cn.data)
+    print(type(o_cn.data.size))
+    # print(torch.from_numpy(o_cn.data))
     test_eq(output, o_cn.array, 'forward')
     F.sum(o_cn).backward()
     test_eq(x.grad, x_cn.grad, 'backward')
     print('test pass')
 
+
+'''
 if __name__=="__main__":
     test_roi_module()
+'''

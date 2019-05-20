@@ -29,8 +29,9 @@ class _ProposalTargetLayer(nn.Module):
         # Deprecated (inside weights)
         self.BBOX_INSIDE_WEIGHTS = torch.FloatTensor((1.0, 1.0, 1.0, 1.0))
 
-    def forward(self, all_rois, gt_boxes, num_boxes):
+    def forward(self, all_rois, gt_boxes, num_boxes, batch_size):
 
+        self.batch_size = batch_size
         self.BBOX_NORMALIZE_MEANS = self.BBOX_NORMALIZE_MEANS.type_as(gt_boxes)
         self.BBOX_NORMALIZE_STDS = self.BBOX_NORMALIZE_STDS.type_as(gt_boxes)
         self.BBOX_INSIDE_WEIGHTS = self.BBOX_INSIDE_WEIGHTS.type_as(gt_boxes)
@@ -42,8 +43,9 @@ class _ProposalTargetLayer(nn.Module):
         all_rois = torch.cat([all_rois, gt_boxes_append], 1)
 
         num_images = 1
-        rois_per_image = int(cfg.TRAIN.BATCH_SIZE / num_images)
-        fg_rois_per_image = int(np.round(cfg.TRAIN.FG_FRACTION * rois_per_image))
+        rois_per_image = int(self.batch_size / num_images)
+        # Fraction of minibatch that is labeled foreground
+        fg_rois_per_image = int(np.round(0.25 * rois_per_image))
         fg_rois_per_image = 1 if fg_rois_per_image == 0 else fg_rois_per_image
         labels, rois, bbox_targets, bbox_inside_weights = self._sample_rois_pytorch(
             all_rois, gt_boxes, fg_rois_per_image,
