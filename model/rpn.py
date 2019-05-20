@@ -19,6 +19,7 @@ class _RPN(nn.Module):
         # in_channels, out_channels, kernel_size=3, stride=1, padding=1
         self.RPN_Conv = nn.Conv2d(self.din, 512, 3, 1, 1, bias=True)
 
+        # 2(bg/fg) * 9(anchor)
         self.nc_score_out = len(self.anchor_scales) * len(self.anchor_ratios) * 2
         self.RPN_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)
 
@@ -48,13 +49,19 @@ class _RPN(nn.Module):
 
         rpn_conv1 = F.relu(self.RPN_Conv(base_feat),inplace=True)
 
-        #input:[batch_size, 512, H, W]
-        #output:[batch_szie, self.nc_score_out, H, W]
+
+        # 1. softmax 分类anchor获得fg和bg
+        # input:[batch_size, 512, H, W]
+        # output:[batch_szie, self.nc_score_out, H, W]
         rpn_cls_score = self.RPN_cls_score(rpn_conv1)  # 1×1卷积
+            # [batch_size, channel, h, w]: [1, 2×9, H, W] -> [1, 2, 9×H, W]
         rpn_cls_score_reshape = self.reshape(rpn_cls_score,2)
-        rpn_cls_prob_reshape =F.softmax(rpn_cls_score_reshape)
+        rpn_cls_prob_reshape =F.softmax(rpn_cls_score_reshape) # 二分类
+            # softmax分类完成后恢复原形状
         rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out)
 
+
+        # 2. 计算anchors的bounding box regression偏移量
         rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)
 
         cfg_key = 'TRAIN' if self.training else 'TEST'
@@ -66,10 +73,10 @@ class _RPN(nn.Module):
 
         if self.training:
             assert gt_boxes is not None
-            # labels:[batch_size,1, A*height, width]
-            # bbox_target:[batch_size, A*4, height,width]
-            # bbox_inside_weights:[batch_size,A*4,height,width]
-            # bbox_outside_weight:[batch_size,A*4,height,width]
+            # labels: [batch_size,1, A*height, width]
+            # bbox_target: [batch_size, A*4, height,width]
+            # bbox_inside_weights: [batch_size,A*4,height,width]
+            # bbox_outside_weight: [batch_size,A*4,height,width]
             rpn_data = self.RPN_anchor_target((rpn_cls_score.data, gt_boxes, im_info, num_boxes))
             # print(rpn_data)
             # rpn_cls_score:[batch_size, H*W*9, 2]

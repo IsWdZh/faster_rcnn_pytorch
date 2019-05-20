@@ -1,9 +1,9 @@
 import torch.nn as nn
 import torch
 import numpy as np
-from .bbox_transform import clip_boxes, bbox_overlaps_batch, bbox_transform_batch
-from ..utils.config import cfg
 from .generate_anchors import generate_anchors
+from .bbox import bbox_overlaps_batch, bbox_transform_batch
+
 class _AnchorTargetLayer(nn.Module):
     '''
     输入：gt_boxes的信息，特征图的尺寸
@@ -91,11 +91,6 @@ class _AnchorTargetLayer(nn.Module):
         # recommendation box  in the ith picture
         gt_max_overlaps, _ = torch.max(overlaps, 1)
 
-        #if a recommendation box has IOU(>0.7) with one of the ground-truths, its label is 1
-        #如果其与某个gt重叠比例大于0.7，则其label 也为1
-        if not cfg.TRAIN.RPN_CLOBBER_POSITIVES:
-            labels[max_overlaps < cfg.TRAIN.RPN_NEGATIVE_OVERLAP] = 0
-
         gt_max_overlaps[gt_max_overlaps==0] = 1e-5
 
         #for each ground-truth, the label of the recommendation box which has the maximum IOU is 1
@@ -104,13 +99,11 @@ class _AnchorTargetLayer(nn.Module):
         if torch.sum(keep) >0 :
             labels[keep>0] = 1
 
-        labels[max_overlaps >= cfg.TRAIN.RPN_POSITIVE_OVERLAP] = 1
+        # 如果其与某个gt重叠比例大于0.7，则其label 也为1, 小于0.3则其label为0
+        labels[max_overlaps >= 0.7] = 1
+        labels[max_overlaps < 0.3] = 0
 
-        if cfg.TRAIN.RPN_CLOBBER_POSITIVES:
-            labels[max_overlaps < cfg.TRAIN.RPN_NEGATIVE_OVERLAP] = 0
-
-        num_fg = int(cfg.TRAIN.RPN_FG_FRACTION * cfg.
-                     TRAIN.RPN_BATCHSIZE)  # 0.5*256
+        num_fg = int(0.5 * 256)  # 0.5*256    max_num_of_fg_example * total_num_of_examples
 
         #sum_bg, sum_fg:[batch]
         sum_fg = torch.sum((labels == 1).int(), 1)
@@ -123,7 +116,7 @@ class _AnchorTargetLayer(nn.Module):
                 disable_inds = fg_inds[rand_num[:fg_inds.size(0)-num_fg]]
                 labels[i][disable_inds] = -1
 
-            num_bg = cfg.TRAIN.RPN_BATCHSIZE - torch.sum((labels ==1).int(), 1)[i]
+            num_bg = 256 - torch.sum((labels ==1).int(), 1)[i]
             if sum_bg[i] > num_bg:
                 bg_inds = torch.nonzero(labels[i] == 0).view(-1)
                 rand_num = torch.from_numpy(np.random.permutation(bg_inds.size(0))).type_as(gt_boxes).long()
@@ -135,15 +128,13 @@ class _AnchorTargetLayer(nn.Module):
 
         bbox_targets = _compute_targets_batch(anchors, gt_boxes.view(-1, 5)[argmax_overlaps.view(-1), :].view(batch_size, -1, 5))
 
-        bbox_inside_weights[labels == 1] = cfg.TRAIN.RPN_BBOX_INSIDE_WEIGHTS[0]
+        bbox_inside_weights[labels == 1] = (1.0, 1.0, 1.0, 1.0)[0]
 
-        if cfg.TRAIN.RPN_POSITIVE_WEIGHT < 0 :
-            num_examples = torch.sum(labels[i] >= 0)
-            positive_weight = 1.0 / num_examples
-            negative_weight = 1.0 / num_examples
-        else:
-            assert ((cfg.TRAIN.RPN_POSITIVE_WEIGHT > 0) &
-                    (cfg.TRAIN.RPN_POSITIVE_WEIGHT < 1))
+
+        num_examples = torch.sum(labels[i] >= 0)
+        positive_weight = 1.0 / num_examples
+        negative_weight = 1.0 / num_examples
+
 
         bbox_outside_weights[labels == 1] = positive_weight
         bbox_outside_weights[labels == 0] = negative_weight

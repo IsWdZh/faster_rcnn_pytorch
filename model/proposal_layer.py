@@ -12,18 +12,11 @@ class _ProposalLayer(nn.Module):
     step2.与RPN训练过后的基础推荐框的偏移参数 相运算得到RPN网络最后真正的推荐框集合。
     step3.通过将推荐框内有物体的得分排序，按分数从高到低取12000个推荐框
     step4.通过nms将每个feature_map上的推荐框缩小至2000个推荐框，并输出
-    (step1. get base recommendation box generated on the feature graph
-     step2. After operation of boxes and bbox_deltas，all the anchors of feature_map
-            perhaps have the different width，height，center_x and center_y.The result is
-            the truely recommendation-boxes of the RPN-net
-     step3. By sorting the score of the recommendation box, 12000 recommendation boxes
-            are selected according to the scores from high to low.
-     step4. By NMS, the num of recommended boxes on each feature_map is reduced to 2000)
     '''
     def __init__(self, feat_stride, scales, ratios):
         super(_ProposalLayer, self).__init__()
 
-        self._feat_stride = feat_stride
+        self._feat_stride = feat_stride   # [16]
         self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales),
                                                           ratios=np.array(ratios))).float()
         self._num_anchors = self._anchors.size(0)
@@ -35,15 +28,15 @@ class _ProposalLayer(nn.Module):
         在图像上截取该box,移除宽或者高不满足要求的预测框
         按score从高到低对proposal排序
         使用NMS筛选一定数量的proposal，然后再从选出的里面取N个'''
-        # input[0]: rpn_cls_prob.data [batch_size, 18, H, W]
-        # input[1]: rpn_bbox_pred.data [batch_size, 36, H, W]
+        # input[0]: rpn_cls_prob.data [batch_size, 18, H, W]    18: 2(bg/fg)×9(anchor)
+        # input[1]: rpn_bbox_pred.data [batch_size, 36, H, W]   36: 4(窗口中心点坐标+宽和高)×9(anchor)
         # input[2]: im_info [h,w,ratio]
         # input[3]: cfg_key
-        scores = input[0][:,self._num_anchors: , :, :]
+        scores = input[0][:, self._num_anchors: , :, :]
         bbox_deltas = input[1]
         im_info = input[2]
-
         cfg_key = input[3]
+
         pre_nms_topN = 12000
         post_nms_topN = 2000
         nms_thresh = 0.7

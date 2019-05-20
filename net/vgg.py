@@ -10,7 +10,7 @@ class VGG16(Faster_RCNN):
         super(VGG16, self).__init__(classes)
 
 
-    def init_module(self):
+    def _init_modules(self):
         vgg = models.vgg16(pretrained=True)
 
         # not using the last classify layer

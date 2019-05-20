@@ -7,11 +7,11 @@ from data.roidb import combined_roidb
 from data.roi_batch_load import roibatchLoader
 from data.sampler import sampler
 from net.vgg import VGG16
-# from faster_rcnn import VGG16
 from IPython import embed
 
 batch_size = 1
 lr = 0.001
+momentum = 0.9
 weight_decay = 0.0005
 USE_WEIGHT_DECAY_ON_BIAS = False
 DOUBLE_LR_ON_BIAS = True
@@ -42,7 +42,12 @@ im_info.data.resize_(data[1].size()).copy_(data[1])
 gt_boxes.data.resize_(data[2].size()).copy_(data[2])
 num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
+
 faster_rcnn = VGG16(imdb.classes)
+
+optimizer = torch.optim.SGD(faster_rcnn.parameters(), lr=lr, momentum=momentum,
+                            weight_decay=weight_decay)
+
 faster_rcnn.forward(im_data, im_info, gt_boxes, num_boxes)
 embed()
 

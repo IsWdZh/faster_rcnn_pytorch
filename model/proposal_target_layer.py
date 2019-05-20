@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 # --------------------------------------------------------
 # Faster R-CNN
 # Copyright (c) 2015 Microsoft
@@ -12,14 +11,13 @@ from __future__ import absolute_import
 import torch
 import torch.nn as nn
 import numpy as np
-from .bbox_transform import bbox_overlaps_batch, bbox_transform_batch
+from model.bbox import bbox_transform_batch, bbox_overlaps_batch
 
 
 class _ProposalTargetLayer(nn.Module):
     """
     对应GT目标的检测proposals 分类label和bbox回归目标
-    Assign object detection proposals to ground-truth targets. Produces proposal
-    classification labels and bounding-box regression targets.
+    选择128个ROIs用以训练
     """
 
     def __init__(self, nclasses):
@@ -64,12 +62,8 @@ class _ProposalTargetLayer(nn.Module):
         pass
 
     def _get_bbox_regression_labels_pytorch(self, bbox_target_data, labels_batch, num_classes):
-        """Bounding-box regression targets (bbox_target_data) are stored in a
-        compact form b x N x (class, tx, ty, tw, th)
-
-        This function expands those targets into the 4-of-4*K representation used
-        by the network (i.e. only one class has non-zero targets).
-
+        """Bounding box 回归目标(bbox_target_data) 以紧凑的形式 b*N*(类别, tx, ty, tw, th)
+        该函数将目标扩展为使用4-of-4*k表示(即：只有一个类具有非零目标)
         Returns:
             bbox_target (ndarray): b x N x 4K blob of regression targets
             bbox_inside_weights (ndarray): b x N x 4K blob of loss weights
@@ -93,7 +87,7 @@ class _ProposalTargetLayer(nn.Module):
         return bbox_targets, bbox_inside_weights
 
     def _compute_targets_pytorch(self, ex_rois, gt_rois):
-        """Compute bounding-box regression targets for an image."""
+        """计算单张图片的bounding box 回归目标"""
 
         assert ex_rois.size(1) == gt_rois.size(1)
         assert ex_rois.size(2) == 4
@@ -104,10 +98,9 @@ class _ProposalTargetLayer(nn.Module):
 
         targets = bbox_transform_batch(ex_rois, gt_rois)
 
-        if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
-            # Optionally normalize targets by a precomputed mean and stdev
-            targets = ((targets - self.BBOX_NORMALIZE_MEANS.expand_as(targets))
-                       / self.BBOX_NORMALIZE_STDS.expand_as(targets))
+        # Optionally normalize targets by a precomputed mean and stdev
+        targets = ((targets - self.BBOX_NORMALIZE_MEANS.expand_as(targets))
+                   / self.BBOX_NORMALIZE_STDS.expand_as(targets))
 
         return targets
 
@@ -137,13 +130,13 @@ class _ProposalTargetLayer(nn.Module):
         # Guard against the case when an image has fewer than max_fg_rois_per_image
         # foreground RoIs
         for i in range(batch_size):
-
-            fg_inds = torch.nonzero(max_overlaps[i] >= cfg.TRAIN.FG_THRESH).view(-1)
+            # ROI判定为foreground的阈值
+            fg_inds = torch.nonzero(max_overlaps[i] >= 0.5).view(-1)
             fg_num_rois = fg_inds.numel()
 
             # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
-            bg_inds = torch.nonzero((max_overlaps[i] < cfg.TRAIN.BG_THRESH_HI) &
-                                    (max_overlaps[i] >= cfg.TRAIN.BG_THRESH_LO)).view(-1)
+            bg_inds = torch.nonzero((max_overlaps[i] < 0.5) &
+                                    (max_overlaps[i] >= 0.1)).view(-1)
             bg_num_rois = bg_inds.numel()
 
             if fg_num_rois > 0 and bg_num_rois > 0:
