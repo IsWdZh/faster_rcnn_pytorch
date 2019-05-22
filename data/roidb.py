@@ -115,7 +115,7 @@ def combined_roidb(imdb_names, training=True):
         return roidb
 
     # if imdb_names.split("_")[0]=="voc":
-    dbtype, year = imdb_names.split("_")[2], imdb_names.split("_")[1]
+    dbtype, year = imdb_names.split("_")[2], imdb_names.split("_")[1]  # trainval, 2007
 
     roidb = get_roidb(imdb_names)
 

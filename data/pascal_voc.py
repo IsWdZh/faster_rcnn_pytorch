@@ -19,10 +19,10 @@ from data.imdb import imdb
 
 class pascal_voc(imdb):
     def __init__(self, image_set, year, devkit_path=None):
-        imdb.__init__(self, 'voc_' + year + '_' + image_set)
+        imdb.__init__(self, 'voc_' + year + '_' + image_set) # voc_2007_trainval
         # self._devkit_path = '~/data/VOCdevkit/VOC2007'
-        self._year = year
-        self._image_set = image_set
+        self._year = year    # 2007
+        self._image_set = image_set  # trainval
         self._devkit_path = os.path.join('/home/wendi', 'data', 'VOCdevkit') \
             if devkit_path is None else devkit_path
         self._data_path = os.path.join(self._devkit_path, 'VOC' + self._year)

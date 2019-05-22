@@ -42,14 +42,13 @@ class RoI(Function):
         output = torch.zeros(N, C, self.pooled_height, self.pooled_width)
         self.argmax_data = torch.zeros(N, C, self.pooled_height, self.pooled_width).int()
         self.rois = rois
-
         args = [features.data_ptr(), rois.data_ptr(),
                 output.data_ptr(),
                 self.argmax_data.data_ptr(),
                 self.spatial_scale, C, H, W,
                 self.pooled_height, self.pooled_width,
                 output.numel()]
-        stream = Stream(ptr=torch.current_stream())
+        stream = Stream(ptr=torch.cuda.current_stream().cuda_stream)
         self.forward_fn(args=args,
                         block=(CUDA_NUM_THREADS, 1, 1),
                         grid=(GET_BLOCKS(output.numel()), 1, 1),

@@ -20,9 +20,9 @@ class _ProposalTargetLayer(nn.Module):
     选择128个ROIs用以训练
     """
 
-    def __init__(self, nclasses):
+    def __init__(self, num_classes):
         super(_ProposalTargetLayer, self).__init__()
-        self._num_classes = nclasses
+        self._num_classes = num_classes
         # Normalize the targets using "precomputed" (or made up) means and stdevs
         self.BBOX_NORMALIZE_MEANS = torch.FloatTensor((0.0, 0.0, 0.0, 0.0))
         self.BBOX_NORMALIZE_STDS = torch.FloatTensor((0.1, 0.1, 0.2, 0.2))
@@ -36,16 +36,17 @@ class _ProposalTargetLayer(nn.Module):
         self.BBOX_NORMALIZE_STDS = self.BBOX_NORMALIZE_STDS.type_as(gt_boxes)
         self.BBOX_INSIDE_WEIGHTS = self.BBOX_INSIDE_WEIGHTS.type_as(gt_boxes)
 
+        # 创建一个和gt_boxes形状一致的全零矩阵 [1, 20, 5]
         gt_boxes_append = gt_boxes.new(gt_boxes.size()).zero_()
-        gt_boxes_append[:, :, 1:5] = gt_boxes[:, :, :4]
+        gt_boxes_append[:, :, 1:5] = gt_boxes[:, :, :4]  # 将gt_boxes第三维前三列赋值给gt_boxes_append第三维1~4列
 
         # Include ground-truth boxes in the set of candidate rois
-        all_rois = torch.cat([all_rois, gt_boxes_append], 1)
+        all_rois = torch.cat([all_rois, gt_boxes_append], 1)  # 如果输入的all_rois=[1,2000,5],输出[1,2020,5]
 
         num_images = 1
         rois_per_image = int(self.batch_size / num_images)
         # Fraction of minibatch that is labeled foreground
-        fg_rois_per_image = int(np.round(0.25 * rois_per_image))
+        fg_rois_per_image = int(np.round(0.25 * rois_per_image))  # if batch_size=1, fg_rois_per_image=0
         fg_rois_per_image = 1 if fg_rois_per_image == 0 else fg_rois_per_image
         labels, rois, bbox_targets, bbox_inside_weights = self._sample_rois_pytorch(
             all_rois, gt_boxes, fg_rois_per_image,
@@ -110,21 +111,31 @@ class _ProposalTargetLayer(nn.Module):
         """Generate a random sample of RoIs comprising foreground and background
         examples.
         """
-        # overlaps: (rois x gt_boxes)
+        # all_rois=[1,2000,5], gt_boxes=[1,20,5], fg_rois_per_image=1,
+        # rois_per_image=1, self._num_classes=21
 
+        # overlaps: (rois x gt_boxes)
         overlaps = bbox_overlaps_batch(all_rois, gt_boxes)
+        print("proposal_target_layer->_sample_rois_pytorch: overlaps = {}".format(overlaps.size()))
 
         max_overlaps, gt_assignment = torch.max(overlaps, 2)
+        print("proposal_target_layer->_sample_rois_pytorch: max_overlaps = {}, "
+              "gt_assignment = {}".format(overlaps.size(), gt_assignment))
 
         batch_size = overlaps.size(0)
         num_proposal = overlaps.size(1)
         num_boxes_per_img = overlaps.size(2)
 
-        offset = torch.arange(0, batch_size) * gt_boxes.size(1)
+        offset = torch.arange(0, batch_size) * gt_boxes.size(1)  # offset=tensor([0])
         offset = offset.view(-1, 1).type_as(gt_assignment) + gt_assignment
+        print("proposal_target_layer->_sample_rois_pytorch: offset = {}, "
+              "offset.view(-1)={}".format(offset, offset.view(-1)))
 
-        labels = gt_boxes[:, :, 4].contiguous().view(-1).index(offset.view(-1)) \
+        # labels = gt_boxes[:, :, 4].contiguous().view(-1).index(offset.view(-1)) \
+        #     .view(batch_size, -1)
+        labels = gt_boxes[:, :, 4].contiguous().view(-1)[offset.view(-1)] \
             .view(batch_size, -1)
+        print("labels = {}".format(labels))
 
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
         rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()

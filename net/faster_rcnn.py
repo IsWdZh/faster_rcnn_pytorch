@@ -28,22 +28,28 @@ class Faster_RCNN(nn.Module):
         im_info = im_info.data
         gt_boxes = gt_boxes.data
         num_boxes = num_boxes.data
-        print("im_info = {}, gt_boxes = {}, num_boxes = {}".format(im_info.size(),
-                                                                   gt_boxes.size(),
-                                                                   num_boxes.size()))
+        print("im_data = {}, im_info = {}, gt_boxes = {}, num_boxes = {}\n".format(im_data.size(),
+                                                                                   im_info.size(),
+                                                                                   gt_boxes.size(),
+                                                                                   num_boxes.size()))
 
         # feed image data to base model to obtain base feature map
         base_feat = self.RCNN_base(im_data)
-        print(base_feat.size())
+        print("base_feat = {}\n".format(base_feat.size()))
 
         rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
         print("After RPN layer, rois={}, rpn_loss_cls={}, rpn_loss_bbox={}".format(rois.size(),
                                                                                    rpn_loss_cls.size(),
                                                                                    rpn_loss_bbox.size()))
+        print("rpn_loss_cls = {}".format(rpn_loss_cls))
 
         if self.training:
             roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes, self.batch_size)
             rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws = roi_data
+            print("In faster_rcnn: rois = {}, rois_label = {}, rois_target = {}, "
+                  "rois_inside_ws = {}, rois_outside_ws = {}".format(rois.size(), rois_label.size(),
+                                                                     rois_target.size(), rois_inside_ws.size(),
+                                                                     rois_outside_ws.size()))
 
             rois_label = Variable(rois_label.view(-1).long())
             rois_target = Variable(rois_target.view(-1, rois_target.size(2)))
@@ -58,7 +64,9 @@ class Faster_RCNN(nn.Module):
             rpn_loss_bbox = 0
 
         rois = Variable(rois)
+        # rois:[1,1,5]  -->  rois.view(-1,5):[1,5]
         pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
+        print("faster_cnn -> pooled_feat = {}".format(pooled_feat.size()))
         bbox_pred = self.RCNN_bbox_pred(pooled_feat)
         if self.training:
             # select the corresponding columns according to roi labels

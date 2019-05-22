@@ -1,18 +1,18 @@
 import torch
 
-def  bbox_transform_inv(boxes, deltas, batch_szie):
+def  bbox_transform_inv(boxes, deltas, batch_size):
     '''
-    input--boxes: [batch_size, H*W*A, 4(xmin,ymin,xmax,ymax)] created by generate_anchor
+    input--boxes: [batch_size, H*W*A, 4(xmin,ymin,xmax,ymax)] 左上右下created by generate_anchor
            bbox_deltas: [batch_size, H*W*A, 4]  bbox偏移量
     boxes：feature_map(H*W)上每个点产生的9个anchor的参数
-    bbox_deltas：RPN网络训练过后的每个anchor对应的偏移量
+    bbox_deltas：RPN网络训练过后的每个anchor对应的偏移量  中心点+宽高
     将标准anchor的参数与偏移量进行运算, 得到RPN网络训练过后真正的推荐框参数
     '''
 
     # boxes: [batch_size, H*W*A, (xmin,ymin,xmax,ymax)]      4->(xmin,ymin,xmax,ymax)  (左上x,左上y,右下x,右下y)
     widths = boxes[:, :, 2] - boxes[:, :, 0] +1.0
     heights = boxes[:, :, 3] - boxes[:, :, 1] +1.0
-    ctr_x = boxes[:, :, 0] + 0.5 * widths   # center
+    ctr_x = boxes[:, :, 0] + 0.5 * widths   # center：top_left + 1/2*width
     ctr_y = boxes[:, :, 1] + 0.5 * heights
 
     # deltas: [batch_size, H*W*A, 4]
@@ -39,10 +39,16 @@ def  bbox_transform_inv(boxes, deltas, batch_szie):
     # y2
     pred_boxes[:, :, 3::4] = pred_ctr_y + 0.5 * pred_h
 
+    # [batch_size, H*W*A, 4]  -> 4 is the original image coordinate of the pred_boxes
     return pred_boxes
 
-def clip_boxes(boxes, im_shape, batch_szie):
-    for i in range(batch_szie):
+def clip_boxes(boxes, im_shape, batch_size):
+    '''
+    im_shape: im_info, saved the  original image[H, W, ratio]
+    boxes: [batch_size, H*W*A, 4]  -> 4 is the original image coordinate of the pred_boxes
+    '''
+
+    for i in range(batch_size):
         boxes[i, :, 0::4].clamp_(0, im_shape[i, 1] - 1)
         boxes[i, :, 1::4].clamp_(0, im_shape[i, 0] - 1)
         boxes[i, :, 2::4].clamp_(0, im_shape[i, 1] - 1)

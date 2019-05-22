@@ -35,6 +35,7 @@ class _AnchorTargetLayer(nn.Module):
         self._allowed_border = 0  # default is 0
 
     def forward(self, input):
+        '''input is a tuple (rpn_cls_score.data, gt_boxes, im_info, num_boxes)'''
         rpn_cls_score = input[0]
         gt_boxes = input[1]
         im_info = input[2]
@@ -59,6 +60,7 @@ class _AnchorTargetLayer(nn.Module):
         self._anchors = self._anchors.type_as(gt_boxes)  # move to specific gpu.
         all_anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
         all_anchors = all_anchors.view(K * A, 4)  # all_anchors为[n*m*9,4]
+        print("all_anchors = {}".format(all_anchors))
 
         total_anchors = int(K * A)
         # each anchors:（xmin，ymin，xmax，ymax）
@@ -69,13 +71,14 @@ class _AnchorTargetLayer(nn.Module):
         inds_inside = torch.nonzero(keep).view(-1)
         # keep only inside anchors
         anchors = all_anchors[inds_inside, :]
+        print("keep only inside anchors = {}".format(anchors))
 
         # label: 1 is positive, 0 is negative, -1 is dont care
         labels = gt_boxes.new(batch_size, inds_inside.size(0)).fill_(-1)
         bbox_inside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
         bbox_outside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
 
-
+        print(labels)
         #input: anchors: (N, 4) ndarray of float
         #       gt_boxes: (b, K, 5) ndarray of float
         #output: overlaps: (b, N, K) ndarray of overlap between boxes and query_boxes
@@ -96,7 +99,7 @@ class _AnchorTargetLayer(nn.Module):
         #for each ground-truth, the label of the recommendation box which has the maximum IOU is 1
         #对每个标定的真值候选区域，与其重叠比例最大的anchor记为前景样本
         keep = torch.sum(overlaps.eq(gt_max_overlaps.view(batch_size, 1, -1).expand_as(overlaps)), 2)
-        if torch.sum(keep) >0 :
+        if torch.sum(keep) > 0 :
             labels[keep>0] = 1
 
         # 如果其与某个gt重叠比例大于0.7，则其label 也为1, 小于0.3则其label为0
@@ -151,9 +154,11 @@ class _AnchorTargetLayer(nn.Module):
         labels = labels.view(batch_size, height, width, A).permute(0, 3, 1, 2).contiguous()
         labels = labels.view(batch_size, 1, A * height, width)
         outputs.append(labels)
+        print("In anchor_target_layer, labels = {}".format(labels.size()))
 
         bbox_targets = bbox_targets.view(batch_size, height, width, A * 4).permute(0, 3, 1, 2).contiguous()
         outputs.append(bbox_targets)
+        print("In anchor_target_layer, bbox_targets = {}".format(bbox_targets.size()))
 
         anchors_count = bbox_inside_weights.size(1)
         bbox_inside_weights = bbox_inside_weights.view(batch_size, anchors_count, 1).expand(batch_size, anchors_count,
@@ -163,12 +168,14 @@ class _AnchorTargetLayer(nn.Module):
             .permute(0, 3, 1, 2).contiguous()
 
         outputs.append(bbox_inside_weights)
+        print("In anchor_target_layer, bbox_inside_weights = {}".format(bbox_inside_weights.size()))
 
         bbox_outside_weights = bbox_outside_weights.view(batch_size, anchors_count, 1).expand(batch_size, anchors_count,
                                                                                               4)
         bbox_outside_weights = bbox_outside_weights.contiguous().view(batch_size, height, width, 4 * A) \
             .permute(0, 3, 1, 2).contiguous()
         outputs.append(bbox_outside_weights)
+        print("In anchor_target_layer, bbox_outside_weights = {}".format(bbox_outside_weights.size()))
 
         return outputs
 

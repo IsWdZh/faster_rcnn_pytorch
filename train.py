@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data.sampler import Sampler
 import torch.optim as optim
 from torch.autograd import Variable
+import visdom
 from data.roidb import combined_roidb
 from data.roi_batch_load import roibatchLoader
 from data.sampler import sampler
@@ -11,6 +12,7 @@ from IPython import embed
 import time
 import tqdm
 import os
+import PIL.Image as Image
 
 max_iter = 500
 epoch_save = 500
@@ -28,11 +30,13 @@ output_path = os.path.join(os.getcwd(), "output")
 if not os.path.exists(output_path):
     os.makedirs(output_path)
 
+# vis = visdom.Visdom()
+
 
 imdb_name = "voc_2007_trainval"
 imdb, roidb, ratio_list, ratio_index = combined_roidb(imdb_name)
 train_size = len(roidb)
-print(imdb.classes)
+print(imdb.classes, "\n")
 
 sampler_batch = sampler(train_size, batch_size)
 
@@ -50,12 +54,16 @@ gt_boxes = Variable(torch.FloatTensor(1))
 
 data_iter = iter(dataloader)
 data = next(data_iter)
+#print("data = {}\n".format(data.size()))
 
 im_data.data.resize_(data[0].size()).copy_(data[0])
 im_info.data.resize_(data[1].size()).copy_(data[1])
 gt_boxes.data.resize_(data[2].size()).copy_(data[2])
 num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
+# vis.image(im_data[0])
+# Image.open(im_data[0])
+# print("im_data = {}\n".format(im_data))
 
 faster_rcnn = VGG16(imdb.classes)
 # print(faster_rcnn)
