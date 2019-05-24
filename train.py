@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch.utils.data.sampler import Sampler
 import torch.optim as optim
 from torch.autograd import Variable
-import visdom
 from data.roidb import combined_roidb
 from data.roi_batch_load import roibatchLoader
 from data.sampler import sampler
@@ -16,7 +15,7 @@ import PIL.Image as Image
 
 max_iter = 500
 epoch_save = 500
-batch_size = 1
+batch_size = 2
 lr = 0.001
 lr_decay_step = 50     # step to do lr decay (epoch)
 lr_decay_gamma = 0.5    # learning rate decay ratio
@@ -44,7 +43,7 @@ dataset = roibatchLoader(roidb, ratio_list, ratio_index, batch_size,
                          imdb.num_classes, training=True)
 
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-                        sampler=sampler_batch, num_workers=0)
+                        sampler=sampler_batch, num_workers=4)
 
 # im_data = Variable(torch.FloatTensor(1).cuda())
 im_data = Variable(torch.FloatTensor(1))
@@ -85,17 +84,22 @@ for key, value in dict(faster_rcnn.named_parameters()).items():
 
 optimizer = torch.optim.SGD(params, momentum=0.9)
 
-
+iters_per_epoch = int(train_size/batch_size)
 for epoch in range(1, max_iter+1):
     faster_rcnn.train()
     loss_temp = 0
     start = time.time()
+
     if epoch % lr_decay_step == 0:
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr_decay_gamma * param_group['lr']
         lr *= lr_decay_gamma
 
-    bar = tqdm(dataloader, total=len(dataloader))   # 进度条
+    # data_iter = iter(dataloader)
+    # for step in range(iters_per_epoch)
+    #     data = next(data_iter)
+
+    bar = tqdm.tqdm(dataloader, total=len(dataloader))
     for step, data in enumerate(bar):
         step += 1
         im_data.data.resize_(data[0].size()).copy_(data[0])
@@ -104,12 +108,23 @@ for epoch in range(1, max_iter+1):
         num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
         faster_rcnn.zero_grad()
+
         rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_box, \
         RCNN_loss_cls, RCNN_loss_bbox, rois_label \
             = faster_rcnn(im_data, im_info, gt_boxes, num_boxes)
+        print("train -> ")
+        print("rois={}, cls_prob={}, bbox_pred={}, "
+              "rpn_loss_cls={}".format(rois.size(), cls_prob.size(),
+                                       bbox_pred.size(), rpn_loss_cls.size()))
+        print("rpn_loss_box={}, RCNN_loss_cls={}, \n"
+              "RCNN_loss_bbox={}, rois_label={}".format(rpn_loss_box, RCNN_loss_cls,
+                                                        RCNN_loss_bbox, rois_label))
+        print(type(rpn_loss_box))
 
         loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + \
                RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
+        print("train -> loss = {}".format(loss.size()))
+
         loss_temp += loss.data[0]
 
         optimizer.zero_grad()
@@ -138,11 +153,7 @@ for epoch in range(1, max_iter+1):
                                                                         loss_rcnn_box))
 
             loss_temp = 0
-            start = time.time()
-
-        break    # only one batch
-
-
+            # start = time.time()
 
     if epoch % epoch_save == 0:
         save_name = os.path.join(output_path,
