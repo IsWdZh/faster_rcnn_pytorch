@@ -41,6 +41,8 @@ class pascal_voc(imdb):
         assert os.path.exists(self._data_path), \
             'Data path does not exist: {}'.format(self._data_path)
 
+    def test(self, s):
+        print('self.'+s)
 
     def image_path_at(self, i):
         """
@@ -86,7 +88,6 @@ class pascal_voc(imdb):
         This function loads/saves from/to a cache file to speed up future calls.
         """
         print("pascal_voc -> get_roidb")
-        # ~/data/VOCdevkit/VOC2007/cache' + 'voc_2007_trainval_gt_roidb.pkl'
         cache_file = os.path.join(self.cache_path, self.name + '_gt_roidb.pkl')
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:

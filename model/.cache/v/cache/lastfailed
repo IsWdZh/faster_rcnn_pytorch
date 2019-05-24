@@ -1,1 +1,3 @@
-{}
+{
+  "roi.py::test_roi_module": true
+}

@@ -2,9 +2,12 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+import numpy as np
 from model.rpn import _RPN
 from model.proposal_target_layer import _ProposalTargetLayer
 from model.roi import _RoIPooling2d
+from PIL import Image
+import matplotlib.pyplot as plt
 
 class Faster_RCNN(nn.Module):
     '''Faster_RCNN model'''
@@ -24,6 +27,12 @@ class Faster_RCNN(nn.Module):
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         self.batch_size = im_data.size(0)
+
+        # pic = im_data[0].numpy()
+        # print(type(pic), pic.shape)
+        # pic = Image.fromarray(pic)
+        # pic.save("/home/wendi/test/first.jpg")
+
 
         im_info = im_info.data
         gt_boxes = gt_boxes.data
@@ -64,9 +73,18 @@ class Faster_RCNN(nn.Module):
             rpn_loss_bbox = 0
 
         rois = Variable(rois)
+        print("In faster_rcnn: Before RCNN_roi_pool, base_feat = {}, "
+              "rois.view(-1,5) = {}".format(base_feat.size(), rois.view(-1,5).size()))
+        # roi_pic = pic[:, rois.view(-1,5)[0][0]:rois.view(-1,5)[0][2],
+        #           rois.view(-1,5)[0][1]:rois.view(-1,5)[0][3]]
+
+
         # rois:[1,1,5]  -->  rois.view(-1,5):[1,5]
         pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
         print("faster_cnn -> pooled_feat = {}".format(pooled_feat.size()))
+        exit("test")
+
+
         bbox_pred = self.RCNN_bbox_pred(pooled_feat)
         if self.training:
             # select the corresponding columns according to roi labels
@@ -87,7 +105,8 @@ class Faster_RCNN(nn.Module):
                 RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
 
                 # bounding box regression L1 loss
-                RCNN_loss_bbox = self._smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
+                RCNN_loss_bbox = self._smooth_l1_loss(bbox_pred, rois_target,
+                                                      rois_inside_ws, rois_outside_ws)
 
             cls_prob = cls_prob.view(self.batch_size, rois.size(1), -1)
             bbox_pred = bbox_pred.view(self.batch_size, rois.size(1), -1)

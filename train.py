@@ -139,6 +139,11 @@ for epoch in range(1, max_iter+1):
 
             loss_temp = 0
             start = time.time()
+
+        break    # only one batch
+
+
+
     if epoch % epoch_save == 0:
         save_name = os.path.join(output_path,
                                  'faster_rcnn_{}_{}.pth'.format(epoch, step))

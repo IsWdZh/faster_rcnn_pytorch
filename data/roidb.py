@@ -91,6 +91,7 @@ def combined_roidb(imdb_names, training=True):
 
     def get_training_roidb(imdb):
         """Returns a roidb (Region of Interest database) for use in training."""
+        print("roidb -> combined_roidb -> get_trainning_roidb")
         # if cfg.TRAIN.USE_FLIPPED:
         # Use horizontally-flipped images during training?
         print('Appending horizontally-flipped training examples...')
@@ -105,7 +106,8 @@ def combined_roidb(imdb_names, training=True):
 
         return imdb.roidb
 
-    def get_roidb(imdb_name):
+    def get_roidb(dbtype, year):
+        print("roidb -> combined_roidb -> get_roidb")
         # imdb = get_imdb(imdb_name)
         imdb = pascal_voc(dbtype, year)
         print('Loaded dataset `{:s}` for training'.format(imdb.name))
@@ -114,10 +116,12 @@ def combined_roidb(imdb_names, training=True):
         roidb = get_training_roidb(imdb)
         return roidb
 
+    print("roidb -> combined_roidb")
+
     # if imdb_names.split("_")[0]=="voc":
     dbtype, year = imdb_names.split("_")[2], imdb_names.split("_")[1]  # trainval, 2007
 
-    roidb = get_roidb(imdb_names)
+    roidb = get_roidb(dbtype, year)
 
     imdb = pascal_voc(dbtype, year)
 
