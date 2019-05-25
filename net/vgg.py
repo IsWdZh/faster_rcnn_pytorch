@@ -19,7 +19,7 @@ class VGG16(Faster_RCNN):
         # 舍弃最后一个Maxpool
         self.RCNN_base = nn.Sequential(*list(vgg.features._modules.values())[:-1])
 
-        # fix the layers' parameters before conv5
+        # fix the layers' parameters
         for layer in range(10):
             for p in self.RCNN_base[layer].parameters(): p.requires_grad=False
 

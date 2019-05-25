@@ -9,13 +9,14 @@ from data.sampler import sampler
 from net.vgg import VGG16
 from IPython import embed
 import time
+from logger import Logger
 import tqdm
 import os
 import PIL.Image as Image
 
 max_iter = 500
 epoch_save = 500
-batch_size = 2
+batch_size = 1
 lr = 0.001
 lr_decay_step = 50     # step to do lr decay (epoch)
 lr_decay_gamma = 0.5    # learning rate decay ratio
@@ -25,23 +26,24 @@ display_iter_num = 1    # iterator display num
 USE_WEIGHT_DECAY_ON_BIAS = False
 DOUBLE_LR_ON_BIAS = True
 
+
+# now_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+
 output_path = os.path.join(os.getcwd(), "output")
 if not os.path.exists(output_path):
     os.makedirs(output_path)
-
-# vis = visdom.Visdom()
+logger = Logger()
 
 
 imdb_name = "voc_2007_trainval"
 imdb, roidb, ratio_list, ratio_index = combined_roidb(imdb_name)
 train_size = len(roidb)
-print(imdb.classes, "\n")
+logger.info("Classes: {}".format(imdb.classes))
 
+exit()
 sampler_batch = sampler(train_size, batch_size)
-
 dataset = roibatchLoader(roidb, ratio_list, ratio_index, batch_size,
                          imdb.num_classes, training=True)
-
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
                         sampler=sampler_batch, num_workers=4)
 
@@ -53,20 +55,16 @@ gt_boxes = Variable(torch.FloatTensor(1))
 
 data_iter = iter(dataloader)
 data = next(data_iter)
-#print("data = {}\n".format(data.size()))
 
 im_data.data.resize_(data[0].size()).copy_(data[0])
 im_info.data.resize_(data[1].size()).copy_(data[1])
 gt_boxes.data.resize_(data[2].size()).copy_(data[2])
 num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
-# vis.image(im_data[0])
-# Image.open(im_data[0])
-# print("im_data = {}\n".format(im_data))
-
 faster_rcnn = VGG16(imdb.classes)
-# print(faster_rcnn)
 faster_rcnn.init_model()
+logger.info(faster_rcnn)
+exit()
 
 optimizer = torch.optim.SGD(faster_rcnn.parameters(), lr=lr, momentum=momentum,
                             weight_decay=weight_decay)
@@ -125,7 +123,8 @@ for epoch in range(1, max_iter+1):
                RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
         print("train -> loss = {}".format(loss.size()))
 
-        loss_temp += loss.data[0]
+        # loss_temp += loss.data[0]
+        loss_temp += loss.item()
 
         optimizer.zero_grad()
         loss.backward()
@@ -136,11 +135,16 @@ for epoch in range(1, max_iter+1):
         if step % display_iter_num == 0:
             end = time.time()
             if step > 0:
-                loss_temp /= display_iter_num
-            loss_rpn_cls = rpn_loss_cls.data[0]
-            loss_rpn_box = rpn_loss_box.data[0]
-            loss_rcnn_cls = RCNN_loss_cls.data[0]
-            loss_rcnn_box = RCNN_loss_bbox.data[0]
+                loss_temp /= (display_iter_num + 1)
+            # loss_rpn_cls = rpn_loss_cls.data[0]
+            # loss_rpn_box = rpn_loss_box.data[0]
+            # loss_rcnn_cls = RCNN_loss_cls.data[0]
+            # loss_rcnn_box = RCNN_loss_bbox.data[0]
+            loss_rpn_cls = rpn_loss_cls.item()
+            loss_rpn_box = rpn_loss_box.item()
+            loss_rcnn_cls = RCNN_loss_cls.item()
+            loss_rcnn_box = RCNN_loss_bbox.item()
+
             fg_cnt = torch.sum(rois_label.data.ne(0))
             bg_cnt = rois_label.data.numel() - fg_cnt
             bar.set_description("epoch{:2d} lr:{:.2e} loss:{:.4f} "

@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-from .proposal_layer import _ProposalLayer
-from model.anchor_target_layer import _AnchorTargetLayer
+from model.rpn.proposal_layer import _ProposalLayer
+from model.rpn.anchor_target_layer import _AnchorTargetLayer
 
 
 class _RPN(nn.Module):
@@ -31,7 +31,7 @@ class _RPN(nn.Module):
         self.RPN_anchor_target = _AnchorTargetLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
 
         self.rpn_loss_cls = 0
-        self.rpn_loss_box = 0
+        self.rpn_loss_bbox = 0
 
     @staticmethod
     def reshape(x, d):
@@ -53,10 +53,11 @@ class _RPN(nn.Module):
 
         # 1. softmax 分类anchor获得fg和bg
         # input:[batch_size, 512, H, W]
-        # output:[batch_szie, self.nc_score_out, H, W]
+        # output:[batch_szie, self.nc_score_out, H, W] [1,18,37,56]
         rpn_cls_score = self.RPN_cls_score(rpn_conv1)  # 1×1卷积
         print("After 3*3, 1*1, rpn_cls_score = {}\n".format(rpn_cls_score.size()))
-            # [batch_size, channel, h, w]: [1, 2×9, H, W] -> [1, 2, 9×H, W]
+
+        # [batch_size, channel, h, w]: [1, 2×9, H, W] -> [1, 2, 9×H, W]
         rpn_cls_score_reshape = self.reshape(rpn_cls_score,2)
         print("After reshape rpn_cls_score_reshape = {}\n".format(rpn_cls_score_reshape.size()))
         rpn_cls_prob_reshape =F.softmax(rpn_cls_score_reshape, dim=1) # 二分类
@@ -67,7 +68,7 @@ class _RPN(nn.Module):
 
 
         # 2. 计算anchors的bounding box regression偏移量
-        rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)
+        rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)   # [1, 36, 37, 56]
         print("road2: bbox_regression rpn_bbox_pred = {}\n".format(rpn_bbox_pred.size()))
 
         cfg_key = 'TRAIN' if self.training else 'TEST'
@@ -76,7 +77,7 @@ class _RPN(nn.Module):
         rois = self.RPN_proposal((rpn_cls_prob.data, rpn_bbox_pred.data, im_info, cfg_key))
         print("In rpn, after proposal, rois = {}".format(rois.size()))
         self.rpn_loss_cls = 0
-        self.rpn_loss_box = 0
+        self.rpn_loss_bbox = 0
 
         if self.training:
             assert gt_boxes is not None
@@ -91,26 +92,36 @@ class _RPN(nn.Module):
                                                                   num_boxes.size()))
             rpn_data = self.RPN_anchor_target((rpn_cls_score.data, gt_boxes, im_info, num_boxes))
             print("After RPN_anchor_target, rpn_data is a list, len(rpn_data) = {}".format(len(rpn_data)))
-            # print(rpn_data)
-            # rpn_cls_score:[batch_size, H*W*9, 2]
-            rpn_cls_score = rpn_cls_score_reshape.permute(0, 2, 3, 1).contiguous().view(batch_size,
-                                                                                        -1, 2)
-            print("rpn_cls_score = {}".format(rpn_cls_score.size()))
-            # label：[batch_size, A*H*W]
-            rpn_label = rpn_data[0].view(batch_size, -1)
 
-            # rpn_keep是返回rpn_label中不为-1的位置
+            # rpn_cls_score:[batch_size, H*W*9, 2] : [1, 18648, 2]
+            rpn_cls_score = rpn_cls_score_reshape.permute(0, 2, 3, 1).contiguous().view(batch_size,-1, 2)
+            print("rpn_cls_score = {}".format(rpn_cls_score.size()))
+
+            # label：[batch_size, A*H*W]:[1, 16650]
+            rpn_label = rpn_data[0].view(batch_size, -1)
+            print("rpn -> rpn_label = {}, type = {}".format(rpn_label.shape, type(rpn_label)))
+
+            # rpn_keep是返回rpn_label中不为-1的位置,返回索引,nonzero返回b*9h*w行1列,view变为1维
             rpn_keep = Variable(rpn_label.view(-1).ne(-1).nonzero().view(-1))
 
-            # index_select是选择rpn_keep所对应比例的行
+            # index_select是选择rpn_keep所对应比例的行,从rpn_cls_score(b*9*h*w, 2)从第0轴按照rpn_keep索引找
             rpn_cls_score = torch.index_select(rpn_cls_score.view(-1,2), 0, rpn_keep)
 
             # rpn_cls_score为返回256个包含正样本和负样本的在前景与背景上的得分
-            rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
-            rpn_label = Variable(rpn_label.long())
+            rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data) # tensor
+            rpn_label = Variable(rpn_label.long())  # 运算完后的输出再用Variable( Tensor.long())转换回来
+
+            # rpn_cls_score = [1, 18, 37, 56]
+            print("rpn -> Before cross_entropy, rpn_cls_score={}, type={}".format(rpn_cls_score.size(),
+                                                                                  type(rpn_cls_score)))
+            print("rpn -> Before cross_entropy, rpn_label={}, type={}".format(rpn_label.size(),
+                                                                              type(rpn_label)))
+
+            # input rpn_cls_score:2D[b*9*h*w,2]:[256, 2] rpn_label:1D[b*9*h*w]:[256]
             self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
             print("self.rpn_loss_cls = {}".format(self.rpn_loss_cls))
-            fg_cnt = torch.sum(rpn_label.data.ne(0))
+            # fg_cnt = torch.sum(rpn_label.data.ne(0))
+
 
             rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
             print("rpn_bbox_targets = {}, rpn_bbox_inside_weights = {}, "
@@ -124,12 +135,12 @@ class _RPN(nn.Module):
             rpn_bbox_outside_weights = Variable(rpn_bbox_outside_weights)
             rpn_bbox_targets = Variable(rpn_bbox_targets)
 
-            self.rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets,
+            self.rpn_loss_bbox = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets,
                                                 rpn_bbox_inside_weights, rpn_bbox_outside_weights,
                                                 sigma=3, dim=[1,2,3])
-            print("self.rpn_loss_box = {}".format(self.rpn_loss_box))
+            print("self.rpn_loss_bbox = {}".format(self.rpn_loss_bbox))
 
-        return rois, self.rpn_loss_cls, self.rpn_loss_box
+        return rois, self.rpn_loss_cls, self.rpn_loss_bbox
 
 
 def _smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights, sigma=1.0, dim=[1]):

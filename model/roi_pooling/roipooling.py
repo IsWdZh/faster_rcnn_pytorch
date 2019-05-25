@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.autograd import Function
 import chainer.functions as cF
 from chainer import Variable as cVariable
-from model.roi_cupy_config import kernel_backward, kernel_forward
+from model.roi_pooling.roi_cupy_config import kernel_backward, kernel_forward
 
 Stream = namedtuple('Stream', ['ptr'])
 

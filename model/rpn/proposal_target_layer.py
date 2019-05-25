@@ -11,7 +11,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from model.bbox import bbox_transform_batch, bbox_overlaps_batch
+from model.rpn.bbox import bbox_transform_batch, bbox_overlaps_batch
 
 
 class _ProposalTargetLayer(nn.Module):

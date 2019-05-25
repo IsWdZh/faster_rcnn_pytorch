@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from model.generate_anchors import generate_anchors
-from model.bbox import bbox_transform_inv, clip_boxes
-from model.nms import nms
+from model.rpn.generate_anchors import generate_anchors
+from model.rpn.bbox import bbox_transform_inv, clip_boxes
+from model.rpn.nms import nms
 
 class _ProposalLayer(nn.Module):
     '''
