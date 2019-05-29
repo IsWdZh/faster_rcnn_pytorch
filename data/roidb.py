@@ -1,133 +1,110 @@
-"""Transform a roidb into a trainable roidb by adding a bunch of metadata."""
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 from PIL import Image
 from data.pascal_voc import pascal_voc
+from logger import get_logger
 
 
-def prepare_roidb(imdb):
-    """Enrich the imdb's roidb by adding some derived quantities that
-    are useful for training. This function precomputes the maximum
-    overlap, taken over ground-truth boxes, between each ROI and
-    each ground-truth box. The class with maximum overlap is also
-    recorded.
-    """
+logger = get_logger()
+class PrepareData():
+    def __init__(self, imdb_names):
+        self.dbtype = imdb_names.split("_")[2]    # trainval
+        self.year = imdb_names.split("_")[1]     # 2007
 
-    roidb = imdb.roidb
-    sizes = [Image.open(imdb.image_path_at(i)).size
-             for i in range(imdb.num_images)]
+    def combine(self):
+        roidb = self.getroidb()
+        imdb = pascal_voc(self.dbtype, self.year)
+        roidb = self.filter_roidb(roidb)
+        ratio_list, ratio_index = self.rank_roidb_ratio(roidb)
 
-    for i in range(len(imdb.image_index)):
-        roidb[i]['img_id'] = i
-        roidb[i]['image'] = imdb.image_path_at(i)
-        if not (imdb.name.startswith('coco')):
+        return imdb, roidb, ratio_list, ratio_index
+
+
+    def getroidb(self):
+        self.imdb = pascal_voc(self.dbtype, self.year)
+
+        # logger.info("Appending horizontally-flipped training examples")
+        logger.info('Before horizontally-flipping, there are {} images'.format(len(self.imdb.image_index)))
+        self.imdb.append_flipped_images()   # 水平翻转图像
+        logger.info('After horizontally-flipping, there are {} images'.format(len(self.imdb.image_index)))
+
+        self.prepare_roidb(self.imdb)
+        self.roidb = self.imdb.roidb
+
+        return self.roidb
+
+
+    def prepare_roidb(self, imdb):
+        """Enrich the imdb's roidb by adding some derived quantities that
+        are useful for training. This function precomputes the maximum
+        overlap, taken over ground-truth boxes, between each ROI and
+        each ground-truth box. The class with maximum overlap is also
+        recorded.
+        """
+        roidb = imdb.roidb
+        sizes = [Image.open(imdb.image_path_at(i)).size
+                 for i in range(imdb.num_images)]
+
+        for i in range(len(imdb.image_index)):
+            roidb[i]['img_id'] = i
+            roidb[i]['image'] = imdb.image_path_at(i)  # pic's absolutly path
+
             roidb[i]['width'] = sizes[i][0]
             roidb[i]['height'] = sizes[i][1]
-        # need gt_overlaps as a dense array for argmax
-        gt_overlaps = roidb[i]['gt_overlaps'].toarray()
-        # max overlap with gt over classes (columns)
-        max_overlaps = gt_overlaps.max(axis=1)
-        # gt class that had the max overlap
-        max_classes = gt_overlaps.argmax(axis=1)
-        roidb[i]['max_classes'] = max_classes
-        roidb[i]['max_overlaps'] = max_overlaps
-        # sanity checks
-        # max overlap of 0 => class should be zero (background)
-        zero_inds = np.where(max_overlaps == 0)[0]
-        assert all(max_classes[zero_inds] == 0)
-        # max overlap > 0 => class should not be zero (must be a fg class)
-        nonzero_inds = np.where(max_overlaps > 0)[0]
-        assert all(max_classes[nonzero_inds] != 0)
 
+            # need gt_overlaps as a dense array for argmax
+            gt_overlaps = roidb[i]['gt_overlaps'].toarray()
+            # max overlap with gt over classes (columns)
+            max_overlaps = gt_overlaps.max(axis=1)
+            # gt class that had the max overlap
+            max_classes = gt_overlaps.argmax(axis=1)
+            roidb[i]['max_classes'] = max_classes
+            roidb[i]['max_overlaps'] = max_overlaps
+            # sanity checks
+            # max overlap of 0 => class should be zero (background)
+            zero_inds = np.where(max_overlaps == 0)[0]
+            assert all(max_classes[zero_inds] == 0)
+            # max overlap > 0 => class should not be zero (must be a fg class)
+            nonzero_inds = np.where(max_overlaps > 0)[0]
+            assert all(max_classes[nonzero_inds] != 0)
 
-def rank_roidb_ratio(roidb):
-    # rank roidb based on the ratio between width and height.
-    ratio_large = 2  # largest ratio to preserve.
-    ratio_small = 0.5  # smallest ratio to preserve.
+    def rank_roidb_ratio(self, roidb):
+        # rank roidb based on the ratio between width and height.
+        ratio_large = 2  # largest ratio to preserve.
+        ratio_small = 0.5  # smallest ratio to preserve.
 
-    ratio_list = []
-    for i in range(len(roidb)):
-        width = roidb[i]['width']
-        height = roidb[i]['height']
-        ratio = width / float(height)
+        ratio_list = []
+        for i in range(len(roidb)):
+            width = roidb[i]['width']
+            height = roidb[i]['height']
+            ratio = width / float(height)
 
-        if ratio > ratio_large:
-            roidb[i]['need_crop'] = 1
-            ratio = ratio_large
-        elif ratio < ratio_small:
-            roidb[i]['need_crop'] = 1
-            ratio = ratio_small
-        else:
-            roidb[i]['need_crop'] = 0
+            if ratio > ratio_large:
+                roidb[i]['need_crop'] = 1
+                ratio = ratio_large
+            elif ratio < ratio_small:
+                roidb[i]['need_crop'] = 1
+                ratio = ratio_small
+            else:
+                roidb[i]['need_crop'] = 0
 
-        ratio_list.append(ratio)
+            ratio_list.append(ratio)
 
-    ratio_list = np.array(ratio_list)
-    ratio_index = np.argsort(ratio_list)
-    return ratio_list[ratio_index], ratio_index
+        ratio_list = np.array(ratio_list)
+        ratio_index = np.argsort(ratio_list)
+        return ratio_list[ratio_index], ratio_index
 
+    def filter_roidb(self, roidb):
+        # filter the image without bounding box.
+        logger.info('before filtering, there are %d images...' % (len(roidb)))
+        i = 0
+        while i < len(roidb):
+            if len(roidb[i]['boxes']) == 0:
+                del roidb[i]
+                i -= 1
+            i += 1
 
-def filter_roidb(roidb):
-    # filter the image without bounding box.
-    print('before filtering, there are %d images...' % (len(roidb)))
-    i = 0
-    while i < len(roidb):
-        if len(roidb[i]['boxes']) == 0:
-            del roidb[i]
-            i -= 1
-        i += 1
-
-    print('after filtering, there are %d images...' % (len(roidb)))
-    return roidb
-
-
-def combined_roidb(imdb_names, training=True):
-    """
-    Combine multiple roidbs
-    """
-
-    def get_training_roidb(imdb):
-        """Returns a roidb (Region of Interest database) for use in training."""
-        print("roidb -> combined_roidb -> get_trainning_roidb")
-        # if cfg.TRAIN.USE_FLIPPED:
-        # Use horizontally-flipped images during training?
-        print('Appending horizontally-flipped training examples...')
-        imdb.append_flipped_images()   # 水平翻转图像
-        print('done')
-
-        print('Preparing training data...')
-
-        prepare_roidb(imdb)
-        # ratio_index = rank_roidb_ratio(imdb)
-        print('done')
-
-        return imdb.roidb
-
-    def get_roidb(dbtype, year):
-        print("roidb -> combined_roidb -> get_roidb")
-        # imdb = get_imdb(imdb_name)
-        imdb = pascal_voc(dbtype, year)
-        print('Loaded dataset `{:s}` for training'.format(imdb.name))
-        imdb.set_proposal_method('gt')
-        print('Set proposal method: {:s}'.format('gt'))
-        roidb = get_training_roidb(imdb)
+        logger.info('after filtering, there are %d images...' % (len(roidb)))
         return roidb
 
-    print("roidb -> combined_roidb")
 
-    # if imdb_names.split("_")[0]=="voc":
-    dbtype, year = imdb_names.split("_")[2], imdb_names.split("_")[1]  # trainval, 2007
 
-    roidb = get_roidb(dbtype, year)
-
-    imdb = pascal_voc(dbtype, year)
-
-    if training:
-        roidb = filter_roidb(roidb)
-
-    ratio_list, ratio_index = rank_roidb_ratio(roidb)
-
-    return imdb, roidb, ratio_list, ratio_index

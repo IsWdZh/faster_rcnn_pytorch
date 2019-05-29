@@ -46,18 +46,18 @@ class imdb(object):
   def image_index(self):
     return self._image_index
 
-  @property
-  def roidb_handler(self):
-    return self._roidb_handler
-
-  @roidb_handler.setter
-  def roidb_handler(self, val):
-    self._roidb_handler = val      # self.gt_roidb
-
-  def set_proposal_method(self, method):
-    print("imdb -> set_proposal_method")
-    method = eval('self.' + method + '_roidb')   # 在pascal_voc中, self.gt_roidb()
-    self.roidb_handler = method
+  # @property
+  # def roidb_handler(self):
+  #   return self._roidb_handler
+  #
+  # @roidb_handler.setter
+  # def roidb_handler(self, val):
+  #   self._roidb_handler = val      # self.gt_roidb
+  #
+  # def set_proposal_method(self, method):
+  #   print("imdb -> set_proposal_method")
+  #   method = eval('self.' + method + '_roidb')   # 在pascal_voc中, self.gt_roidb()
+  #   self.roidb_handler = method
 
   @property
   def roidb(self):
@@ -71,7 +71,7 @@ class imdb(object):
     #   flipped
     if self._roidb is not None:
       return self._roidb
-    self._roidb = self.roidb_handler()      # self.gt_roidb
+    self._roidb = self._roidb_handler()      # self.gt_roidb   in pascal_voc.py
     print("_roidb.size={}".format(len(self._roidb)))
     return self._roidb
 
@@ -99,13 +99,10 @@ class imdb(object):
     raise NotImplementedError
 
   def _get_widths(self):
-    print("imdb -> _get_widths")
     return [PIL.Image.open(self.image_path_at(i)).size[0]
             for i in range(self.num_images)]
 
   def append_flipped_images(self):
-    print("imdb -> append_flipped_images")
-    print("before append_flipped_images, num_images=self.num_images")
     num_images = self.num_images
     widths = self._get_widths()
     for i in range(num_images):

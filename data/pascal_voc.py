@@ -1,5 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
 # --------------------------------------------------------
 # Fast R-CNN
 # Copyright (c) 2015 Microsoft
@@ -15,8 +13,9 @@ import scipy.io as sio
 import xml.etree.ElementTree as ET
 import pickle
 from data.imdb import imdb
+from logger import get_logger
 
-
+logger = get_logger()
 class pascal_voc(imdb):
     def __init__(self, image_set, year, devkit_path=None):
         imdb.__init__(self, 'voc_' + year + '_' + image_set) # voc_2007_trainval
@@ -31,11 +30,13 @@ class pascal_voc(imdb):
                          'bottle', 'bus', 'car', 'cat', 'chair',
                          'cow', 'diningtable', 'dog', 'horse',
                          'motorbike', 'person', 'pottedplant',
-                         'sheep', 'sofa', 'train', 'tvmonitor')
-        self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
+                         'sheep', 'sofa', 'train', 'tvmonitor')   # tuple
+        self._class_to_ind = dict(zip(self.classes, range(self.num_classes))) # 从0对应
         self._image_ext = '.jpg'
-        self._image_index = self._load_image_set_index()
+        self._image_index = self._load_image_set_index()   # has 5011 pic name in list without .jpg
 
+        # a list, each element is a dict, has
+        # {boxes, gt_classes, gt_ishard, gt_overlaps, flipped, seg_areas}
         self._roidb_handler = self.gt_roidb
 
         assert os.path.exists(self._data_path), \
@@ -71,11 +72,11 @@ class pascal_voc(imdb):
         # Example path to image set file:
         # self._devkit_path + /VOCdevkit2007/VOC2007/ImageSets/Main/val.txt
         image_set_file = os.path.join(self._data_path, 'ImageSets', 'Main',
-                                      self._image_set + '.txt')
+                                      self._image_set + '.txt')    # 5011
         assert os.path.exists(image_set_file), \
             'Path does not exist: {}'.format(image_set_file)
         with open(image_set_file) as f:
-            image_index = [x.strip() for x in f.readlines()]
+            image_index = [x.strip() for x in f.readlines()]  # add pic name in list
         return image_index
 
 
@@ -85,7 +86,6 @@ class pascal_voc(imdb):
 
         This function loads/saves from/to a cache file to speed up future calls.
         """
-        print("pascal_voc -> get_roidb")
         # ~/data/VOCdevkit/VOC2007/cache' + 'voc_2007_trainval_gt_roidb.pkl'
         cache_file = os.path.join(self.cache_path, self.name + '_gt_roidb.pkl')
         if os.path.exists(cache_file):
@@ -94,6 +94,7 @@ class pascal_voc(imdb):
             print('{} gt roidb loaded from {}'.format(self.name, cache_file))
             return roidb
 
+        # a list, and each pic has a dict, get info from xml file
         gt_roidb = [self._load_pascal_annotation(index)
                     for index in self.image_index]
         with open(cache_file, 'wb') as fid:
@@ -173,12 +174,13 @@ class pascal_voc(imdb):
         Load image and bounding boxes info from XML file in the PASCAL VOC
         format.
         """
+        # data/VOCdevkit/VOC2007/Annotations/  +  each pic .xml file
         filename = os.path.join(self._data_path, 'Annotations', index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
-        num_objs = len(objs)
+        num_objs = len(objs)   # object num
 
-        boxes = np.zeros((num_objs, 4), dtype=np.uint16)
+        boxes = np.zeros((num_objs, 4), dtype=np.uint16)   # shape=(num_objs, 4), 4 is coordinary
         gt_classes = np.zeros((num_objs), dtype=np.int32)
         overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
         # "Seg" area for pascal is just the box area
@@ -198,13 +200,13 @@ class pascal_voc(imdb):
             difficult = 0 if diffc == None else int(diffc.text)
             ishards[ix] = difficult
 
-            cls = self._class_to_ind[obj.find('name').text.lower().strip()]
+            cls = self._class_to_ind[obj.find('name').text.lower().strip()] # object 对应的编号
             boxes[ix, :] = [x1, y1, x2, y2]
             gt_classes[ix] = cls
-            overlaps[ix, cls] = 1.0
-            seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
+            overlaps[ix, cls] = 1.0      # 21个分类,pos的标为1.0,其余为0.0
+            seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)   # 面积
 
-        overlaps = scipy.sparse.csr_matrix(overlaps)
+        overlaps = scipy.sparse.csr_matrix(overlaps)  # transfor to scipy.sparse.csr.csr_matrix type
 
         return {'boxes': boxes,
                 'gt_classes': gt_classes,

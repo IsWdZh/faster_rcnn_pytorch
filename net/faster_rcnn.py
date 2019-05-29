@@ -3,12 +3,13 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
-from model.rpn import _RPN
-from model.proposal_target_layer import _ProposalTargetLayer
-from model.roi import RoIPooling2D, RoIPooling2D_chainer
-from PIL import Image
-import matplotlib.pyplot as plt
+from model.rpn.rpn import _RPN
+from model.rpn.proposal_target_layer import _ProposalTargetLayer
+from model.roi_pooling.roipooling import RoIPooling2D, RoIPooling2D_chainer
+from logger import get_logger
 
+
+logger = get_logger()
 class Faster_RCNN(nn.Module):
     '''Faster_RCNN model'''
     def __init__(self, classes):
@@ -32,14 +33,13 @@ class Faster_RCNN(nn.Module):
         im_info = im_info.data
         gt_boxes = gt_boxes.data
         num_boxes = num_boxes.data
-        print("im_data = {}, im_info = {}, gt_boxes = {}, num_boxes = {}\n".format(im_data.size(),
+        logger.info("im_data = {}, im_info = {}, gt_boxes = {}, num_boxes = {}\n".format(im_data.size(),
                                                                                    im_info.size(),
                                                                                    gt_boxes.size(),
                                                                                    num_boxes.size()))
-
         # feed image data to base model to obtain base feature map
         base_feat = self.RCNN_base(im_data)
-        print("base_feat = {}\n".format(base_feat.size()))
+        logger.info("base_feat = {}\n".format(base_feat.size()))
 
         rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
         print("After RPN layer, rois={}, rpn_loss_cls={}, rpn_loss_bbox={}".format(rois.size(),

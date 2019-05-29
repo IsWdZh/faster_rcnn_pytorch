@@ -16,7 +16,7 @@ class VGG16(Faster_RCNN):
         # not using the last classify layer
         vgg.classifier = nn.Sequential(*list(vgg.classifier._modules.values())[:-1])
 
-        # 舍弃最后一个Maxpool
+        # not using the last Maxpool layer
         self.RCNN_base = nn.Sequential(*list(vgg.features._modules.values())[:-1])
 
         # fix the layers' parameters
@@ -28,3 +28,8 @@ class VGG16(Faster_RCNN):
         self.RCNN_cls_score = nn.Linear(4096, self.num_classes)
 
         self.RCNN_bbox_pred = nn.Linear(4096, 4 * self.num_classes)
+
+
+
+
+

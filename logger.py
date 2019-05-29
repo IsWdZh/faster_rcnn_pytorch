@@ -2,51 +2,59 @@ import logging
 import os
 import time
 
-
-class Log():
+class Logger():
     def __init__(self):
+    # def initialize(self):
+        self.logger = logging.getLogger("train")
         self.now_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
-        self.INFO_format = "%(asctime)s  %(name)s  %(levelname)s  %(message)s"
+        self.INFO_format = "%(asctime)s %(name)s %(module)s %(levelname)s %(message)s" # 8s靠右,-6s靠左
         self.DATEFMT = "[%Y-%m-%d %H:%M:%S]"
         self.logpath = os.path.join(os.getcwd(), "output/log")
+        if not os.path.exists(self.logpath):
+            os.makedirs(self.logpath)
         self.log_filename = os.path.join(self.logpath, self.now_time + ".log")
-        self.logger = logging.getLogger("train")
+
         logging.basicConfig(level=logging.INFO,
                             format=self.INFO_format,
                             datefmt=self.DATEFMT,
                             handlers=[logging.FileHandler(self.log_filename),
                                       logging.StreamHandler()])
 
-    def _info(self, message):
+    def info(self, message):
         self.logger.info(message)
 
-    def _debug(self, message):
+    def debug(self, message):
         self.logger.debug(message)
 
-    def _warning(self, message):
+    def warning(self, message):
         self.logger.warning(message)
 
-    def _error(self, message):
+    def error(self, message):
         self.logger.error(message)
 
-class Logger():
-    def __init__(self):
-        self.log = Log()
+    # @staticmethod
+    def get_logger(self):
+        if not self.logger.handlers:
+            # file
+            file_handler = logging.FileHandler(self.log_filename)
+            file_handler.setFormatter(self.INFO_format)
 
-    def info(self, message):
-        self.log._info(message)
+            # console
+            console_handler = logging.StreamHandler()
+            console_handler.formatter = self.INFO_format
 
-    def debug(self, message):
-        self.log._debug(message)
+            self.logger.addHandler(file_handler)
+            self.logger.addHandler(console_handler)
 
-    def warning(self, message):
-        self.log._warning(message)
+            self.logger.setLevel(logging.INFO)
 
-    def error(self, message):
-        self.log._error(message)
-
+        return self.logger
 
 
+logger = Logger()
+
+def get_logger():
+    return logger
 
 
 

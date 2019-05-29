@@ -1,6 +1,6 @@
 import torch
 
-def  bbox_transform_inv(boxes, deltas, batch_size):
+def  bbox_transform_inv(boxes, deltas):
     '''
     input--boxes: [batch_size, H*W*A, 4(xmin,ymin,xmax,ymax)] 左上右下created by generate_anchor
            bbox_deltas: [batch_size, H*W*A, 4]  bbox偏移量
@@ -42,17 +42,18 @@ def  bbox_transform_inv(boxes, deltas, batch_size):
     # [batch_size, H*W*A, 4]  -> 4 is the original image coordinate of the pred_boxes
     return pred_boxes
 
-def clip_boxes(boxes, im_shape, batch_size):
+def clip_boxes(boxes, im_info):
     '''
-    im_shape: im_info, saved the  original image[H, W, ratio]
+    im_info: saved the  original image[H, W, ratio]
     boxes: [batch_size, H*W*A, 4]  -> 4 is the original image coordinate of the pred_boxes
     '''
 
-    for i in range(batch_size):
-        boxes[i, :, 0::4].clamp_(0, im_shape[i, 1] - 1)
-        boxes[i, :, 1::4].clamp_(0, im_shape[i, 0] - 1)
-        boxes[i, :, 2::4].clamp_(0, im_shape[i, 1] - 1)
-        boxes[i, :, 3::4].clamp_(0, im_shape[i, 0] - 1)
+    # batch_size: im_info.size(0)
+    for i in range(im_info.size(0)):
+        boxes[i, :, 0::4].clamp_(0, im_info[i, 1] - 1)
+        boxes[i, :, 1::4].clamp_(0, im_info[i, 0] - 1)
+        boxes[i, :, 2::4].clamp_(0, im_info[i, 1] - 1)
+        boxes[i, :, 3::4].clamp_(0, im_info[i, 0] - 1)
     return boxes
 
 def bbox_overlaps_batch(anchors, gt_boxes):

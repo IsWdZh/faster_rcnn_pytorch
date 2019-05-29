@@ -47,35 +47,26 @@ class _RPN(nn.Module):
     def forward(self, base_feat, im_info, gt_boxes, num_boxes):
         batch_size =base_feat.size(0)
 
-        rpn_conv1 = F.relu(self.RPN_Conv(base_feat),inplace=True)
-        print("rpn_conv1: {}".format(rpn_conv1.size()))
+        rpn_conv1 = F.relu(self.RPN_Conv(base_feat), inplace=True)
 
-
-        # 1. softmax 分类anchor获得fg和bg
+        # 1. softmax 分类anchor获得loggerfg和bg
         # input:[batch_size, 512, H, W]
         # output:[batch_szie, self.nc_score_out, H, W] [1,18,37,56]
         rpn_cls_score = self.RPN_cls_score(rpn_conv1)  # 1×1卷积
-        print("After 3*3, 1*1, rpn_cls_score = {}\n".format(rpn_cls_score.size()))
 
         # [batch_size, channel, h, w]: [1, 2×9, H, W] -> [1, 2, 9×H, W]
-        rpn_cls_score_reshape = self.reshape(rpn_cls_score,2)
-        print("After reshape rpn_cls_score_reshape = {}\n".format(rpn_cls_score_reshape.size()))
+        rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
         rpn_cls_prob_reshape =F.softmax(rpn_cls_score_reshape, dim=1) # 二分类
-        print("After Softmax rpn_cls_prob_reshape = {}\n".format(rpn_cls_prob_reshape.size()))
-            # softmax分类完成后恢复原形状
+        # softmax分类完成后恢复原形状
         rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out)
-        print("After second reshape rpn_cls_prob = {}\n".format(rpn_cls_prob.size()))
 
 
         # 2. 计算anchors的bounding box regression偏移量
         rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)   # [1, 36, 37, 56]
-        print("road2: bbox_regression rpn_bbox_pred = {}\n".format(rpn_bbox_pred.size()))
-
-        cfg_key = 'TRAIN' if self.training else 'TEST'
 
         # rois：[batch_size, post_nms_topN, 5(1+4)] 1:代表是第几张照片，4代表推荐框参数
-        rois = self.RPN_proposal((rpn_cls_prob.data, rpn_bbox_pred.data, im_info, cfg_key))
-        print("In rpn, after proposal, rois = {}".format(rois.size()))
+        rois = self.RPN_proposal((rpn_cls_prob.data, rpn_bbox_pred.data, im_info))
+
         self.rpn_loss_cls = 0
         self.rpn_loss_bbox = 0
 

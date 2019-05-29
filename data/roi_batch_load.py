@@ -27,7 +27,7 @@ class roibatchLoader(data.Dataset):
 
         # given the ratio_list, we want to make the ratio same for each batch.
         self.ratio_list_batch = torch.Tensor(self.data_size).zero_()
-        num_batch = int(np.ceil(len(ratio_index) / batch_size))
+        num_batch = int(np.ceil(len(ratio_index) / batch_size))   # 向上取整
         for i in range(num_batch):
             left_idx = i*batch_size
             right_idx = min((i+1)*batch_size-1, self.data_size-1)
