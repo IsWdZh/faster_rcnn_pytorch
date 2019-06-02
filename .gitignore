@@ -1,5 +1,4 @@
 __pycache__/
-.net/__pycache__/
-.output/model/
-.output/log/
+*/__pycache__/
+.output/
 .idea/

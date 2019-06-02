@@ -4,8 +4,9 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 from model.rpn.proposal_layer import _ProposalLayer
 from model.rpn.anchor_target_layer import _AnchorTargetLayer
+from logger import get_logger
 
-
+logger = get_logger()
 class _RPN(nn.Module):
     def __init__(self, din):
         super(_RPN, self).__init__()
@@ -72,25 +73,18 @@ class _RPN(nn.Module):
 
         if self.training:
             assert gt_boxes is not None
-            # labels: [batch_size,1, A*height, width]
-            # bbox_target: [batch_size, A*4, height,width]
-            # bbox_inside_weights: [batch_size,A*4,height,width]
-            # bbox_outside_weight: [batch_size,A*4,height,width]
-            print("input RPN_anchor_target: (rpn_cls_score.data={}, "
-                  "gt_boxes={}, im_info={}, num_boxes={})".format(rpn_cls_score.data.size(),
-                                                                  gt_boxes.size(),
-                                                                  im_info.size(),
-                                                                  num_boxes.size()))
+
+            # rpn_cls_score=[1, 18, 37, 56]     gt_boxes=[1, 20, 5]
+            # im_info=[1, 3]      num_boxes=[1]
             rpn_data = self.RPN_anchor_target((rpn_cls_score.data, gt_boxes, im_info, num_boxes))
-            print("After RPN_anchor_target, rpn_data is a list, len(rpn_data) = {}".format(len(rpn_data)))
+            # rpn_data is a list, len(rpn_data) = {}".format(len(rpn_data)))
 
             # rpn_cls_score:[batch_size, H*W*9, 2] : [1, 18648, 2]
             rpn_cls_score = rpn_cls_score_reshape.permute(0, 2, 3, 1).contiguous().view(batch_size,-1, 2)
-            print("rpn_cls_score = {}".format(rpn_cls_score.size()))
 
             # label：[batch_size, A*H*W]:[1, 16650]
             rpn_label = rpn_data[0].view(batch_size, -1)
-            print("rpn -> rpn_label = {}, type = {}".format(rpn_label.shape, type(rpn_label)))
+            logger.debug("rpn -> rpn_label = {}, type = {}".format(rpn_label.shape, type(rpn_label)))
 
             # rpn_keep是返回rpn_label中不为-1的位置,返回索引,nonzero返回b*9h*w行1列,view变为1维
             rpn_keep = Variable(rpn_label.view(-1).ne(-1).nonzero().view(-1))
@@ -103,23 +97,28 @@ class _RPN(nn.Module):
             rpn_label = Variable(rpn_label.long())  # 运算完后的输出再用Variable( Tensor.long())转换回来
 
             # rpn_cls_score = [1, 18, 37, 56]
-            print("rpn -> Before cross_entropy, rpn_cls_score={}, type={}".format(rpn_cls_score.size(),
+            logger.debug("rpn -> Before cross_entropy, rpn_cls_score={}, type={}".format(rpn_cls_score.size(),
                                                                                   type(rpn_cls_score)))
-            print("rpn -> Before cross_entropy, rpn_label={}, type={}".format(rpn_label.size(),
+            logger.debug("rpn -> Before cross_entropy, rpn_label={}, type={}".format(rpn_label.size(),
                                                                               type(rpn_label)))
 
             # input rpn_cls_score:2D[b*9*h*w,2]:[256, 2] rpn_label:1D[b*9*h*w]:[256]
             self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
-            print("self.rpn_loss_cls = {}".format(self.rpn_loss_cls))
+            logger.debug("self.rpn_loss_cls = {}".format(self.rpn_loss_cls))
             # fg_cnt = torch.sum(rpn_label.data.ne(0))
 
 
             rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
-            print("rpn_bbox_targets = {}, rpn_bbox_inside_weights = {}, "
+            logger.debug("rpn_bbox_targets = {}, rpn_bbox_inside_weights = {}, "
                   "rpn_bbox_outside_weights = {}".format(rpn_bbox_targets.size(),
                                                          rpn_bbox_inside_weights.size(),
                                                          rpn_bbox_outside_weights.size()))
-            print("rpn_bbox_inside_weights: ", rpn_bbox_inside_weights)
+            logger.debug("rpn_bbox_inside_weights: {}".format(rpn_bbox_inside_weights))
+
+            # labels: [batch_size,1, A*height, width]
+            # bbox_target: [batch_size, A*4, height,width]
+            # bbox_inside_weights: [batch_size,A*4,height,width]
+            # bbox_outside_weight: [batch_size,A*4,height,width]
 
             # compute bbox regression loss
             rpn_bbox_inside_weights = Variable(rpn_bbox_inside_weights)
@@ -129,7 +128,7 @@ class _RPN(nn.Module):
             self.rpn_loss_bbox = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets,
                                                 rpn_bbox_inside_weights, rpn_bbox_outside_weights,
                                                 sigma=3, dim=[1,2,3])
-            print("self.rpn_loss_bbox = {}".format(self.rpn_loss_bbox))
+            logger.debug("self.rpn_loss_bbox = {}".format(self.rpn_loss_bbox))
 
         return rois, self.rpn_loss_cls, self.rpn_loss_bbox
 

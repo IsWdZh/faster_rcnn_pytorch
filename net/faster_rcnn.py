@@ -33,24 +33,24 @@ class Faster_RCNN(nn.Module):
         im_info = im_info.data
         gt_boxes = gt_boxes.data
         num_boxes = num_boxes.data
-        logger.info("im_data = {}, im_info = {}, gt_boxes = {}, num_boxes = {}\n".format(im_data.size(),
+        logger.debug("im_data = {}, im_info = {}, gt_boxes = {}, num_boxes = {}\n".format(im_data.size(),
                                                                                    im_info.size(),
                                                                                    gt_boxes.size(),
                                                                                    num_boxes.size()))
         # feed image data to base model to obtain base feature map
         base_feat = self.RCNN_base(im_data)
-        logger.info("base_feat = {}\n".format(base_feat.size()))
+        logger.debug("base_feat = {}\n".format(base_feat.size()))
 
         rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
-        print("After RPN layer, rois={}, rpn_loss_cls={}, rpn_loss_bbox={}".format(rois.size(),
+        logger.debug("After RPN layer, rois={}, rpn_loss_cls={}, rpn_loss_bbox={}".format(rois.size(),
                                                                                    rpn_loss_cls.size(),
                                                                                    rpn_loss_bbox.size()))
-        print("rpn_loss_cls = {}, rpn_loss_bbox = {}".format(rpn_loss_cls, rpn_loss_bbox))
+        logger.debug("rpn_loss_cls = {}, rpn_loss_bbox = {}".format(rpn_loss_cls, rpn_loss_bbox))
 
         if self.training:
             roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes, self.batch_size)
             rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws = roi_data
-            print("In faster_rcnn: rois = {}, rois_label = {}, rois_target = {}, "
+            logger.debug("In faster_rcnn: rois = {}, rois_label = {}, rois_target = {}, "
                   "rois_inside_ws = {}, rois_outside_ws = {}".format(rois.size(), rois_label.size(),
                                                                      rois_target.size(), rois_inside_ws.size(),
                                                                      rois_outside_ws.size()))
@@ -68,7 +68,7 @@ class Faster_RCNN(nn.Module):
             rpn_loss_bbox = 0
 
         rois = Variable(rois)
-        print("In faster_rcnn: Before RCNN_roi_pool, base_feat = {}, "
+        logger.debug("In faster_rcnn: Before RCNN_roi_pool, base_feat = {}, "
               "rois.view(-1,5) = {}".format(base_feat.size(), rois.view(-1,5).size()))
         # roi_pic = pic[:, rois.view(-1,5)[0][0]:rois.view(-1,5)[0][2],
         #           rois.view(-1,5)[0][1]:rois.view(-1,5)[0][3]]
@@ -76,35 +76,35 @@ class Faster_RCNN(nn.Module):
         # rois:[1,1,5]  -->  rois.view(-1,5):[1,5]
         # pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
         pooled_feat = self.RCNN_roi_pool_chainer(base_feat, rois.view(-1, 5))
-        print("faster_cnn -> pooled_feat = {}".format(pooled_feat.size()))
+        logger.debug("faster_cnn -> pooled_feat = {}".format(pooled_feat.size()))
 
         # 展开
         pooled_feat_flat = pooled_feat.view(pooled_feat.size(0), -1)
         pooled_feat_fc = self.RCNN_top(pooled_feat_flat)
 
         bbox_pred = self.RCNN_bbox_pred(pooled_feat_fc)
-        print("faster_cnn -> bbox_pred = {}".format(bbox_pred.size()))
+        logger.debug("faster_cnn -> bbox_pred = {}".format(bbox_pred.size()))
 
         if self.training:
             # select the corresponding columns according to roi labels
             # [1,84] -> [1,21,4]
             bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
-            print("faster_rcnn -> bbox_pred_view = {}".format(bbox_pred_view.size()))
+            logger.debug("faster_rcnn -> bbox_pred_view = {}".format(bbox_pred_view.size()))
 
             # bbox_pred_select = torch.Size([1, 1, 4])
             bbox_pred_select = torch.gather(bbox_pred_view, 1,
                                             rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 4))
-            print("faster_rcnn -> bbox_pred_select = {}".format(bbox_pred_select.size()))
+            logger.debug("faster_rcnn -> bbox_pred_select = {}".format(bbox_pred_select.size()))
 
             # bbox_pred = torch.Size([1, 4])
             bbox_pred = bbox_pred_select.squeeze(1)
-            print("faster_rcnn -> bbox_pred = {}".format(bbox_pred.size()))
+            logger.debug("faster_rcnn -> bbox_pred = {}".format(bbox_pred.size()))
 
             # compute object classification probability
             cls_score = self.RCNN_cls_score(pooled_feat_fc)
-            print("faster_rcnn -> cls_score = {}".format(cls_score.size()))
+            logger.debug("faster_rcnn -> cls_score = {}".format(cls_score.size()))
             cls_prob = F.softmax(cls_score, dim=1)
-            print("faster_rcnn -> cls_prob = {}".format(cls_prob.size()))
+            logger.debug("faster_rcnn -> cls_prob = {}".format(cls_prob.size()))
 
             RCNN_loss_cls = 0
             RCNN_loss_bbox = 0
@@ -112,13 +112,13 @@ class Faster_RCNN(nn.Module):
             if self.training:
                 # classification loss
                 RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
-                print("faster_rcnn -> RCNN_loss_cls = {}, size={}".format(RCNN_loss_cls,
+                logger.debug("faster_rcnn -> RCNN_loss_cls = {}, size={}".format(RCNN_loss_cls,
                                                                           RCNN_loss_cls.size()))
 
                 # bounding box regression L1 loss
                 RCNN_loss_bbox = self._smooth_l1_loss(bbox_pred, rois_target,
                                                       rois_inside_ws, rois_outside_ws)
-                print("faster_rcnn -> RCNN_loss_bbox = {}, size={}".format(RCNN_loss_bbox,
+                logger.debug("faster_rcnn -> RCNN_loss_bbox = {}, size={}".format(RCNN_loss_bbox,
                                                                            RCNN_loss_bbox.size()))
 
 

@@ -3,6 +3,9 @@ import torch
 import numpy as np
 from .generate_anchors import generate_anchors
 from .bbox import bbox_overlaps_batch, bbox_transform_batch
+from logger import get_logger
+
+logger = get_logger()
 
 class _AnchorTargetLayer(nn.Module):
     '''
@@ -36,9 +39,9 @@ class _AnchorTargetLayer(nn.Module):
 
     def forward(self, input):
         '''input is a tuple (rpn_cls_score.data, gt_boxes, im_info, num_boxes)'''
-        rpn_cls_score = input[0]
-        gt_boxes = input[1]
-        im_info = input[2]
+        rpn_cls_score = input[0]   # [batch_size, 2*9, H, W]
+        gt_boxes = input[1]        # [batch_size, 20, 5(x1,y1,x2,y2,cls)]
+        im_info = input[2]         # [batch_size, 3(h,w,ratio)]
         num_boxes = input[3]
 
         # map of shape (..., H, W)
@@ -47,8 +50,8 @@ class _AnchorTargetLayer(nn.Module):
         batch_size = gt_boxes.size(0)
 
         feat_height, feat_width = rpn_cls_score.size(2), rpn_cls_score.size(3)
-        shift_x = np.arange(0, feat_width) * self._feat_stride
-        shift_y = np.arange(0, feat_height) * self._feat_stride
+        shift_x = np.arange(0, feat_width) * self._feat_stride  # [0, 1, ..., W]*16
+        shift_y = np.arange(0, feat_height) * self._feat_stride  # [0, 1, ..., H]*16
         shift_x, shift_y = np.meshgrid(shift_x, shift_y)
         shifts = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),
                                              shift_x.ravel(), shift_y.ravel())).transpose())
@@ -57,10 +60,10 @@ class _AnchorTargetLayer(nn.Module):
         A = self._num_anchors
         K = shifts.size(0)
 
-        self._anchors = self._anchors.type_as(gt_boxes)  # move to specific gpu.
+        self._anchors = self._anchors.type_as(gt_boxes)
         all_anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
-        all_anchors = all_anchors.view(K * A, 4)  # all_anchors为[n*m*9,4]
-        print("all_anchors = {}".format(all_anchors))
+        all_anchors = all_anchors.view(K * A, 4)  # all_anchors为[n*m*9, 4]
+        logger.debug("all_anchors = {}".format(all_anchors))
 
         total_anchors = int(K * A)
         # each anchors:（xmin，ymin，xmax，ymax）
@@ -71,14 +74,14 @@ class _AnchorTargetLayer(nn.Module):
         inds_inside = torch.nonzero(keep).view(-1)
         # keep only inside anchors
         anchors = all_anchors[inds_inside, :]
-        print("keep only inside anchors = {}".format(anchors))
+        logger.debug("keep only inside anchors = {}".format(anchors))
 
         # label: 1 is positive, 0 is negative, -1 is dont care
         labels = gt_boxes.new(batch_size, inds_inside.size(0)).fill_(-1)
         bbox_inside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
         bbox_outside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
 
-        print(labels)
+        logger.debug(labels)
         #input: anchors: (N, 4) ndarray of float
         #       gt_boxes: (b, K, 5) ndarray of float
         #output: overlaps: (b, N, K) ndarray of overlap between boxes and query_boxes
@@ -154,11 +157,11 @@ class _AnchorTargetLayer(nn.Module):
         labels = labels.view(batch_size, height, width, A).permute(0, 3, 1, 2).contiguous()
         labels = labels.view(batch_size, 1, A * height, width)
         outputs.append(labels)
-        print("In anchor_target_layer, labels = {}".format(labels.size()))
+        logger.debug("In anchor_target_layer, labels = {}".format(labels.size()))
 
         bbox_targets = bbox_targets.view(batch_size, height, width, A * 4).permute(0, 3, 1, 2).contiguous()
         outputs.append(bbox_targets)
-        print("In anchor_target_layer, bbox_targets = {}".format(bbox_targets.size()))
+        logger.debug("In anchor_target_layer, bbox_targets = {}".format(bbox_targets.size()))
 
         anchors_count = bbox_inside_weights.size(1)
         bbox_inside_weights = bbox_inside_weights.view(batch_size, anchors_count, 1).expand(batch_size, anchors_count,
@@ -168,14 +171,14 @@ class _AnchorTargetLayer(nn.Module):
             .permute(0, 3, 1, 2).contiguous()
 
         outputs.append(bbox_inside_weights)
-        print("In anchor_target_layer, bbox_inside_weights = {}".format(bbox_inside_weights.size()))
+        logger.debug("In anchor_target_layer, bbox_inside_weights = {}".format(bbox_inside_weights.size()))
 
         bbox_outside_weights = bbox_outside_weights.view(batch_size, anchors_count, 1).expand(batch_size, anchors_count,
                                                                                               4)
         bbox_outside_weights = bbox_outside_weights.contiguous().view(batch_size, height, width, 4 * A) \
             .permute(0, 3, 1, 2).contiguous()
         outputs.append(bbox_outside_weights)
-        print("In anchor_target_layer, bbox_outside_weights = {}".format(bbox_outside_weights.size()))
+        logger.debug("In anchor_target_layer, bbox_outside_weights = {}".format(bbox_outside_weights.size()))
 
         return outputs
 

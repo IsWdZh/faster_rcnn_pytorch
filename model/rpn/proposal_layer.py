@@ -4,6 +4,9 @@ import numpy as np
 from model.rpn.generate_anchors import generate_anchors
 from model.rpn.bbox import bbox_transform_inv, clip_boxes
 from model.rpn.nms import nms
+from logger import get_logger
+
+logger = get_logger()
 
 class _ProposalLayer(nn.Module):
     '''
@@ -35,12 +38,14 @@ class _ProposalLayer(nn.Module):
         scores = input[0][:, self._num_anchors: , :, :] # [batch_size, 2*9, H, W]取后9个
         bbox_deltas = input[1]
         im_info = input[2]
+        '''
         print("In proposal: \n")
         print("Anchor = {}".format(self._anchors))
         print("_num_anchors = {}".format(self._num_anchors))
         print("scores: rpn_cls_prob.data[:, 9: , :, :] = {}".format(scores.size()))
         print("bbox_deltas: rpn_bbox_pred.data = {}".format(bbox_deltas.size()))
         print("im_info : im_info = {}".format(im_info))
+        '''
 
         pre_nms_topN = 12000
         post_nms_topN = 2000
@@ -50,15 +55,15 @@ class _ProposalLayer(nn.Module):
         batch_size = bbox_deltas.size(0)
 
         feat_height, feat_width = scores.size(2), scores.size(3)
-        print("feat_hegiht = {}, feat_width = {}\n".format(feat_height, feat_width))
+        logger.debug("feat_hegiht = {}, feat_width = {}\n".format(feat_height, feat_width))
 
         #shift_x: [W]: 生成0-feat_width(base_feat的width)数量的一维向量,每个元素乘16(但不是恢复图像原尺寸W)
         shift_x = np.arange(0, feat_width) * self._feat_stride
-        print("shift_x = {}".format(shift_x.shape))
+        logger.debug("shift_x = {}".format(shift_x.shape))
 
         #shift_Y: [H]: 生成0-feat_height(base_feat的height)数量的一维向量,每个元素乘16(但不是恢复图像原尺寸H)
         shift_y = np.arange(0, feat_height) * self._feat_stride
-        print("shift_y = {}".format(shift_y.shape))
+        logger.debug("shift_y = {}".format(shift_y.shape))
 
         #shift_x:[H, W]->[[0, 16, 32, 48...,(W-1)*16],
         #                 [0, 16, 32, 48...,(W-1)*16],
@@ -68,7 +73,7 @@ class _ProposalLayer(nn.Module):
         #                   ...........
         #                 [(H-1)*16,....]]
         shift_x, shift_y = np.meshgrid(shift_x, shift_y)   # 生成网格点坐标矩阵
-        print("After np.meshgrid, shift_x = {}, shift_y = {}\n".format(shift_x.shape, shift_y.shape))
+        logger.debug("After np.meshgrid, shift_x = {}, shift_y = {}\n".format(shift_x.shape, shift_y.shape))
 
         #shifts:[H*W, 4]->[[0,  0,  0, 0],
         #                   ..........
@@ -82,15 +87,15 @@ class _ProposalLayer(nn.Module):
         # 矩阵按行叠加,转置,转为torch.Tensor
         shifts = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),
                                   shift_x.ravel(), shift_y.ravel())).transpose())
-        print("按行叠加，转置，再转为torch.Tensor后, shifts = {}\n".format(shifts.size()))
+        logger.debug("按行叠加，转置，再转为torch.Tensor后, shifts = {}\n".format(shifts.size()))
 
         # 把tensor变成在内存中连续分布的形式
         shifts = shifts.contiguous().type_as(scores).float()
-        print("将其在内存内连续, shifts = {}\n".format(shifts.size()))
+        logger.debug("将其在内存内连续, shifts = {}\n".format(shifts.size()))
 
         A = self._num_anchors       # 9
         K = shifts.size(0)          # feature_map->(H, W) -> H * W = K   37*50=1850
-        print("K = {}".format(K))
+        logger.debug("K = {}".format(K))
 
         self._anchors = self._anchors.type_as(scores)
 

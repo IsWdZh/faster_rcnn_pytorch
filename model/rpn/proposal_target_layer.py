@@ -12,7 +12,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 from model.rpn.bbox import bbox_transform_batch, bbox_overlaps_batch
+from logger import get_logger
 
+logger = get_logger()
 
 class _ProposalTargetLayer(nn.Module):
     """
@@ -116,10 +118,10 @@ class _ProposalTargetLayer(nn.Module):
 
         # overlaps: (rois x gt_boxes)
         overlaps = bbox_overlaps_batch(all_rois, gt_boxes)
-        print("proposal_target_layer->_sample_rois_pytorch: overlaps = {}".format(overlaps.size()))
+        logger.debug("proposal_target_layer->_sample_rois_pytorch: overlaps = {}".format(overlaps.size()))
 
         max_overlaps, gt_assignment = torch.max(overlaps, 2)
-        print("proposal_target_layer->_sample_rois_pytorch: max_overlaps = {}, "
+        logger.debug("proposal_target_layer->_sample_rois_pytorch: max_overlaps = {}, "
               "gt_assignment = {}".format(overlaps.size(), gt_assignment))
 
         batch_size = overlaps.size(0)
@@ -128,14 +130,14 @@ class _ProposalTargetLayer(nn.Module):
 
         offset = torch.arange(0, batch_size) * gt_boxes.size(1)  # offset=tensor([0])
         offset = offset.view(-1, 1).type_as(gt_assignment) + gt_assignment
-        print("proposal_target_layer->_sample_rois_pytorch: offset = {}, "
+        logger.debug("proposal_target_layer->_sample_rois_pytorch: offset = {}, "
               "offset.view(-1)={}".format(offset, offset.view(-1)))
 
         # labels = gt_boxes[:, :, 4].contiguous().view(-1).index(offset.view(-1)) \
         #     .view(batch_size, -1)
         labels = gt_boxes[:, :, 4].contiguous().view(-1)[offset.view(-1)] \
             .view(batch_size, -1)
-        print("labels = {}".format(labels))
+        logger.debug("labels = {}".format(labels))
 
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
         rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()

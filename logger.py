@@ -7,7 +7,7 @@ class Logger():
     # def initialize(self):
         self.logger = logging.getLogger("train")
         self.now_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
-        self.INFO_format = "%(asctime)s %(name)s %(module)s %(levelname)s %(message)s" # 8s靠右,-6s靠左
+        self.INFO_format = "%(asctime)s %(name)s %(levelname)s %(message)s" # 8s靠右,-6s靠左
         self.DATEFMT = "[%Y-%m-%d %H:%M:%S]"
         self.logpath = os.path.join(os.getcwd(), "output/log")
         if not os.path.exists(self.logpath):
