@@ -20,7 +20,7 @@ class Faster_RCNN(nn.Module):
         self.RCNN_loss_bbox = 0
 
         # define rpn
-        self.RCNN_rpn = _RPN(self.base_feat_out_dim)
+        self.RCNN_rpn = _RPN(self.base_feat_out_dim, use_gpu=self.use_gpu)
         self.RCNN_proposal_target = _ProposalTargetLayer(self.num_classes)
 
         # size of the pooled region after ROI pooling.
@@ -76,6 +76,8 @@ class Faster_RCNN(nn.Module):
         # rois:[1,1,5]  -->  rois.view(-1,5):[1,5]
         # pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
         pooled_feat = self.RCNN_roi_pool_chainer(base_feat, rois.view(-1, 5))
+        if self.use_gpu:
+            pooled_feat = Variable(pooled_feat).cuda()
         logger.debug("faster_cnn -> pooled_feat = {}".format(pooled_feat.size()))
 
         # 展开
@@ -170,6 +172,9 @@ class Faster_RCNN(nn.Module):
 
     def clip_gradient(self, model, clip_norm):
         """Computes a gradient clipping coefficient based on gradient norm."""
+        if self.use_gpu:
+            model = model.cpu()
+
         totalnorm = 0
         for p in model.parameters():
             if p.requires_grad:
@@ -181,4 +186,8 @@ class Faster_RCNN(nn.Module):
         for p in model.parameters():
             if p.requires_grad:
                 p.grad.mul_(norm)
+
+        if self.use_gpu:
+            model = model.cuda()
+        
 

@@ -1,6 +1,13 @@
 import logging
 import os
+import ctypes
 import time
+
+FOREGROUND_WHITE = 0x0007
+FOREGROUND_BLUE = 0x01 # text color contains blue.
+FOREGROUND_GREEN= 0x02 # text color contains green.
+FOREGROUND_RED  = 0x04 # text color contains red.
+FOREGROUND_YELLOW = FOREGROUND_RED | FOREGROUND_GREEN
 
 class Logger():
     def __init__(self):
@@ -14,23 +21,35 @@ class Logger():
             os.makedirs(self.logpath)
         self.log_filename = os.path.join(self.logpath, self.now_time + ".log")
 
+        # self.STD_OUTPUT_HANDLE= -11
+        # self.std_out_handle = ctypes.windll.kernel32.GetStdHandle(self.STD_OUTPUT_HANDLE)
+
         logging.basicConfig(level=logging.INFO,
                             format=self.INFO_format,
                             datefmt=self.DATEFMT,
                             handlers=[logging.FileHandler(self.log_filename),
                                       logging.StreamHandler()])
 
-    def info(self, message):
-        self.logger.info(message)
+    # def set_color(self, color):
+    #     handle=self.std_out_handle
+    #     bool = ctypes.windll.kernel32.SetConsoleTextAttribute(handle, color)
+    #     return bool
 
     def debug(self, message):
         self.logger.debug(message)
 
-    def warning(self, message):
-        self.logger.warning(message)
+    def info(self, message):
+        self.logger.info(message)
 
-    def error(self, message):
+    def warning(self, message, color=FOREGROUND_YELLOW):
+        # self.set_color(color)
+        self.logger.warning(message)
+        # self.set_color(FOREGROUND_WHITE)
+
+    def error(self, message, color=FOREGROUND_RED):
+        # self.set_color(color)
         self.logger.error(message)
+        # self.set_color(FOREGROUND_WHITE)
 
     # @staticmethod
     def get_logger(self):

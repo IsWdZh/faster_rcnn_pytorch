@@ -1,13 +1,19 @@
 import torch
+from torch.autograd import Variable
 import numpy as np
 
 
+# def nms_gpu(dets, thresh):
+#     keep = dets.new(dets.size(0), 1).zero_().int()
+#     num_out = dets.new(1).zero_().int()
+#     nms.nms_cuda(keep, dets, num_out, thresh)
+#     keep = keep[:num_out[0]]
+#     return keep
+
 def nms_gpu(dets, thresh):
-    keep = dets.new(dets.size(0), 1).zero_().int()
-    num_out = dets.new(1).zero_().int()
-    nms.nms_cuda(keep, dets, num_out, thresh)
-    keep = keep[:num_out[0]]
-    return keep
+    keep = nms_cpu(dets.cpu(), thresh)
+    return Variable(keep).cuda()
+
 
 def nms_cpu(dets, thresh):
     dets = dets.numpy()
@@ -39,9 +45,9 @@ def nms_cpu(dets, thresh):
 
     return torch.IntTensor(keep)
 
-def nms(dets, thresh, force_cpu=False):
+def nms(dets, thresh, force_gpu=True):
     """Dispatch to either CPU or GPU NMS implementations."""
-    force_cpu = True
+    # force_gpu = False
     if dets.shape[0] == 0:
         return []
-    return nms_gpu(dets, thresh) if force_cpu == False else nms_cpu(dets, thresh)
+    return nms_gpu(dets, thresh) if force_gpu == True else nms_cpu(dets, thresh)

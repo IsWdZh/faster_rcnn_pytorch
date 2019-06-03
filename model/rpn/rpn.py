@@ -8,9 +8,10 @@ from logger import get_logger
 
 logger = get_logger()
 class _RPN(nn.Module):
-    def __init__(self, din):
+    def __init__(self, din, use_gpu=False):
         super(_RPN, self).__init__()
 
+        self.use_gpu = use_gpu
         self.din = din  # input channel num
         self.anchor_scales = [8, 16, 32]   # anchor_scales
         self.anchor_ratios = [0.5, 1, 2]   # anchor_ratios
@@ -27,7 +28,8 @@ class _RPN(nn.Module):
         self.nc_bbox_out = len(self.anchor_scales) * len(self.anchor_ratios) * 4
         self.RPN_bbox_pred = nn.Conv2d(512, self.nc_bbox_out, 1, 1, 0)
 
-        self.RPN_proposal = _ProposalLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
+        self.RPN_proposal = _ProposalLayer(self.feat_stride, self.anchor_scales, 
+                                            self.anchor_ratios, self.use_gpu)
 
         self.RPN_anchor_target = _AnchorTargetLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
 

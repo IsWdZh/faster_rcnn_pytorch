@@ -14,8 +14,8 @@ import os
 from IPython import embed
 import PIL.Image as Image
 
-max_iter = 500
-epoch_save = 50
+max_iter = 100
+epoch_save = 1
 batch_size = 1
 lr = 0.001
 lr_decay_step = 50     # step to do lr decay (epoch)
@@ -25,6 +25,7 @@ weight_decay = 0.0005
 display_iter_num = 10    # 多少个batch展示一次
 USE_WEIGHT_DECAY_ON_BIAS = False
 DOUBLE_LR_ON_BIAS = True
+USE_GPU = False
 
 
 # now_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
@@ -39,6 +40,16 @@ if not os.path.exists(model_path):
 
 logger = get_logger()
 
+if torch.cuda.is_available():
+    if not USE_GPU:
+        logger.warning("CUDA is available, you can set USE_GPU to True to use gpu training")
+    else:
+        logger.info("Using GPU training model !")
+else:
+    if USE_GPU:
+        USE_GPU = False
+        logger.warning("CUDA is not available, Will use thr CPU training model by default!")
+
 
 imdb_name = "voc_2007_trainval"
 preparedata = PrepareData(imdb_name)
@@ -52,29 +63,28 @@ dataset = roibatchLoader(roidb, ratio_list, ratio_index, batch_size,
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
                                          sampler=sampler_batch)
 
-# im_data = Variable(torch.FloatTensor(1).cuda())
-im_data = Variable(torch.FloatTensor(1))
-im_info = Variable(torch.FloatTensor(1))
-num_boxes = Variable(torch.LongTensor(1))
-gt_boxes = Variable(torch.FloatTensor(1))
-
 data_iter = iter(dataloader)
 data = next(data_iter)
 
-im_data.data.resize_(data[0].size()).copy_(data[0])
-im_info.data.resize_(data[1].size()).copy_(data[1])
-gt_boxes.data.resize_(data[2].size()).copy_(data[2])
-num_boxes.data.resize_(data[3].size()).copy_(data[3])
+if USE_GPU:
+    im_data = Variable(data[0]).cuda()
+    im_info = Variable(data[1]).cuda()
+    gt_boxes = Variable(data[2]).cuda()
+    num_boxes = Variable(data[3]).cuda()
+else:
+    im_data, im_info = Variable(data[0]), Variable(data[1])
+    gt_boxes, num_boxes = Variable(data[2]), Variable(data[3])
+    
 
-
-faster_rcnn = VGG16(imdb.classes)
+faster_rcnn = VGG16(imdb.classes, use_gpu=USE_GPU)
 faster_rcnn.init_model()
 logger.info(faster_rcnn)
+
 
 optimizer = torch.optim.SGD(faster_rcnn.parameters(), lr=lr, momentum=momentum,
                             weight_decay=weight_decay)
 
-faster_rcnn.forward(im_data, im_info, gt_boxes, num_boxes)
+# faster_rcnn.forward(im_data, im_info, gt_boxes, num_boxes)
 
 params = []
 for key, value in dict(faster_rcnn.named_parameters()).items():
@@ -84,6 +94,9 @@ for key, value in dict(faster_rcnn.named_parameters()).items():
                         'weight_decay': USE_WEIGHT_DECAY_ON_BIAS and weight_decay or 0}]
         else:
             params += [{'params':[value], 'lr':lr, 'weight_decay': weight_decay}]
+
+if USE_GPU:
+    faster_rcnn = faster_rcnn.cuda()
 
 optimizer = torch.optim.SGD(params, momentum=0.9)
 
@@ -107,10 +120,15 @@ for epoch in range(1, max_iter+1):
         logger.info("train sets percentage: {} / {}".format((step+1)*batch_size,train_size))
 
         data = next(data_iter)      # data: batch_size, so iteration iters_per_epoch
-        im_data.data.resize_(data[0].size()).copy_(data[0])
-        im_info.data.resize_(data[1].size()).copy_(data[1])
-        gt_boxes.data.resize_(data[2].size()).copy_(data[2])
-        num_boxes.data.resize_(data[3].size()).copy_(data[3])
+        
+        if USE_GPU:
+            im_data = Variable(data[0]).cuda()
+            im_info = Variable(data[1]).cuda()
+            gt_boxes = Variable(data[2]).cuda()
+            num_boxes = Variable(data[3]).cuda()
+        else:
+            im_data, im_info = Variable(data[0]), Variable(data[1])
+            gt_boxes, num_boxes = Variable(data[2]), Variable(data[3])
 
         faster_rcnn.zero_grad()
         # optimizer.zero_grad()

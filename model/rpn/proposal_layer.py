@@ -16,14 +16,18 @@ class _ProposalLayer(nn.Module):
     step3.通过将推荐框内有物体的得分排序，按分数从高到低取12000个推荐框
     step4.通过nms将每个feature_map上的推荐框缩小至2000个推荐框，并输出
     '''
-    def __init__(self, feat_stride, scales, ratios):
+    def __init__(self, feat_stride, scales, ratios, use_gpu=False):
         super(_ProposalLayer, self).__init__()
 
         self._feat_stride = feat_stride   # [16]
         self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales),
                                                           ratios=np.array(ratios))).float()
         self._num_anchors = self._anchors.size(0)
-        self.nms_gpu = True
+        self.use_gpu = use_gpu
+        if self.use_gpu:
+            self.nms_gpu = True
+        else:
+            self.nms_gpu = False
 
     def forward(self, input):
         '''对于每个location上的(H,W),生成以该位置为中心的k个anchor boxe
@@ -147,7 +151,7 @@ class _ProposalLayer(nn.Module):
             # 7. take after_nms_topN (e.g. 300)
             # 8. return the top proposals (-> RoIs top)
             keep_idx_i = nms(torch.cat((proposals_single, scores_single), 1),
-                             nms_thresh, force_cpu=not self.nms_gpu)  # torch.cat((a,b),dim)按维度拼接
+                             nms_thresh, force_gpu=self.nms_gpu)  # torch.cat((a,b),dim)按维度拼接
             keep_idx_i = keep_idx_i.long().view(-1)
 
             if post_nms_topN > 0 :
